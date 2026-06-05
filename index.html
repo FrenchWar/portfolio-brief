@@ -166,6 +166,712 @@
   <label>Finnhub API Key</label>
   <input type="text" id="finnhub-key" placeholder="your finnhub key" autocomplete="off">
 
+  <div style="margin-top:14px;display:flex;align-items:center;gap:8px;">
+    <input type="checkbox" id="remember-keys" style="width:auto;cursor:pointer;">
+    <label for="remember-keys" style="margin:0;text-transform:none;font-size:.82rem;letter-spacing:0;color:var(--mid);cursor:pointer;">Remember my keys on this device</label>
+  </div>
+
+  <button class="run-btn" id="run-btn" onclick="runAgent()">Generate Brief</button>
+  <div id="keys-saved-note" style="display:none;margin-top:10px;font-size:.78rem;color:var(--mid);text-align:center;">
+    Keys remembered — <span onclick="clearSavedKeys()" style="cursor:pointer;text-decoration:underline;">clear saved keys</span>
+  </div>
+</div>
+
+<div id="progress-area">
+  <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+  <div id="progress-label">Starting…</div>
+</div>
+
+<div id="report-area"></div>
+
+<script>
+// ── Key persistence ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    const ak = localStorage.getItem('pb_anthropic_key');
+    const fk = localStorage.getItem('pb_finnhub_key');
+    if (ak) {
+      document.getElementById('anthropic-key').value = ak;
+      document.getElementById('finnhub-key').value = fk || '';
+      document.getElementById('remember-keys').checked = true;
+      document.getElementById('keys-saved-note').style.display = 'block';
+    }
+  } catch(e) {}
+});
+
+function clearSavedKeys() {
+  try {
+    localStorage.removeItem('pb_anthropic_key');
+    localStorage.removeItem('pb_finnhub_key');
+    document.getElementById('anthropic-key').value = '';
+    document.getElementById('finnhub-key').value = '';
+    document.getElementById('remember-keys').checked = false;
+    document.getElementById('keys-saved-note').style.display = 'none';
+  } catch(e) {}
+}
+
+const HOLDINGS = [
+  // AI / Semiconductors
+  { ticker: 'NVDA', theme: 'AI/Semi' },
+  { ticker: 'TSM',  theme: 'AI/Semi' },
+  { ticker: 'ASML', theme: 'AI/Semi' },
+  { ticker: 'AVGO', theme: 'AI/Semi' },
+  { ticker: 'QCOM', theme: 'AI/Semi' },
+  { ticker: 'CSCO', theme: 'AI/Semi' },
+  { ticker: 'DELL', theme: 'AI/Semi' },
+  { ticker: 'CRWD', theme: 'AI/Semi' },
+  { ticker: 'VEEV', theme: 'AI/Semi' },
+  // Platform / Consumer
+  { ticker: 'AAPL', theme: 'Platform' },
+  { ticker: 'AMZN', theme: 'Platform' },
+  { ticker: 'BABA', theme: 'Platform' },
+  { ticker: 'WMT',  theme: 'Platform' },
+  { ticker: 'DASH', theme: 'Platform' },
+  { ticker: 'NKE',  theme: 'Platform' },
+  { ticker: 'NYT',  theme: 'Platform' },
+  // Industrials / Transport
+  { ticker: 'GE',   theme: 'Industrial' },
+  { ticker: 'BA',   theme: 'Industrial' },
+  { ticker: 'CAT',  theme: 'Industrial' },
+  { ticker: 'DAL',  theme: 'Industrial' },
+  { ticker: 'FDX',  theme: 'Industrial' },
+  { ticker: 'WAB',  theme: 'Industrial' },
+  // Energy / Utilities
+  { ticker: 'XOM',  theme: 'Energy' },
+  { ticker: 'CVX',  theme: 'Energy' },
+  { ticker: 'COP',  theme: 'Energy' },
+  { ticker: 'SO',   theme: 'Energy' },
+  { ticker: 'BEP',  theme: 'Energy' },
+  { ticker: 'BEPC', theme: 'Energy' },
+  // Financials / Data
+  { ticker: 'BAC',  theme: 'Financials' },
+  { ticker: 'JPM',  theme: 'Financials' },
+  { ticker: 'SPGI', theme: 'Financials' },
+  { ticker: 'COWZ', theme: 'Financials' },
+  // Health Care
+  { ticker: 'VRTX', theme: 'Health' },
+  { ticker: 'JNJ',  theme: 'Health' },
+  { ticker: 'PFE',  theme: 'Health' },
+  { ticker: 'BMY',  theme: 'Health' },
+  { ticker: 'VTRS', theme: 'Health' },
+  // Materials
+  { ticker: 'PKX',  theme: 'Materials' },
+];
+
+// ── helpers ────────────────────────────────────────────────────────────────
+
+function setProgress(pct, label) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+/** fetch with timeout + retry on NetworkError */
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 8000, retries = 2) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(timer);
+      return res;
+    } catch (err) {
+      clearTimeout(timer);
+      const isNetwork = err.name === 'TypeError' || err.name === 'AbortError' ||
+                        (err.message && err.message.includes('NetworkError'));
+      if (isNetwork && attempt < retries) {
+        // brief back-off before retry
+        await new Promise(r => setTimeout(r, 600 * (attempt + 1)));
+        continue;
+      }
+      throw err; // re-throw after exhausting retries
+    }
+  }
+}
+
+async function fetchQuote(ticker, finnhubKey) {
+  const url = `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${finnhubKey}`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 8000, 2);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    if (d.c == null || d.c === 0) return null; // no data
+    return {
+      price: d.c,
+      change: d.d,
+      pct: d.dp,
+      high: d.h,
+      low: d.l,
+      prevClose: d.pc
+    };
+  } catch (err) {
+    return { error: err.message || 'NetworkError' };
+  }
+}
+
+async function fetchEarnings(ticker, finnhubKey) {
+  const from = new Date();
+  const to   = new Date(); to.setDate(to.getDate() + 90);
+  const fmt  = d => d.toISOString().split('T')[0];
+  const url  = `https://finnhub.io/api/v1/calendar/earnings?from=${fmt(from)}&to=${fmt(to)}&symbol=${ticker}&token=${finnhubKey}`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 8000, 1);
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d.earningsCalendar?.[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchNews(ticker, finnhubKey) {
+  const from = new Date(); from.setDate(from.getDate() - 1);
+  const to   = new Date();
+  const fmt  = d => d.toISOString().split('T')[0];
+  const url  = `https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${fmt(from)}&to=${fmt(to)}&token=${finnhubKey}`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 8000, 1);
+    if (!res.ok) return [];
+    const items = await res.json();
+    // Return up to 2 most recent articles
+    return (items || []).slice(0, 2).map(n => ({
+      ticker,
+      headline: n.headline,
+      url: n.url,
+      source: n.source,
+      datetime: n.datetime
+    }));
+  } catch { return []; }
+}
+
+async function fetchRecommendation(ticker, finnhubKey) {
+  const url = `https://finnhub.io/api/v1/stock/recommendation?symbol=${ticker}&token=${finnhubKey}`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 8000, 1);
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Most recent recommendation period
+    return data?.[0] || null;
+  } catch { return null; }
+}
+
+async function fetchPriceTarget(ticker, finnhubKey) {
+  const url = `https://finnhub.io/api/v1/stock/price-target?symbol=${ticker}&token=${finnhubKey}`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 8000, 1);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.targetMean) return null;
+    return {
+      low: data.targetLow,
+      high: data.targetHigh,
+      mean: data.targetMean,
+      lastUpdated: data.lastUpdated
+    };
+  } catch { return null; }
+}
+
+// ── main agent ─────────────────────────────────────────────────────────────
+
+async function runAgent() {
+  const anthropicKey = document.getElementById('anthropic-key').value.trim();
+  const finnhubKey   = document.getElementById('finnhub-key').value.trim();
+
+  if (!anthropicKey || !finnhubKey) {
+    alert('Please enter both API keys.');
+    return;
+  }
+
+  try {
+    if (document.getElementById('remember-keys').checked) {
+      localStorage.setItem('pb_anthropic_key', anthropicKey);
+      localStorage.setItem('pb_finnhub_key', finnhubKey);
+    } else {
+      localStorage.removeItem('pb_anthropic_key');
+      localStorage.removeItem('pb_finnhub_key');
+    }
+  } catch(e) {}
+
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('progress-area').style.display = 'block';
+  document.getElementById('run-date').textContent = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  // ── 1. Fetch quotes ────────────────────────────────────────────────────
+  const quoteData = [];
+  const networkFailures = [];
+  const noData = [];
+
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const { ticker, theme } = HOLDINGS[i];
+    setProgress(
+      Math.round((i / HOLDINGS.length) * 55),
+      `Fetching ${ticker} (${i + 1}/${HOLDINGS.length})…`
+    );
+
+    const q = await fetchQuote(ticker, finnhubKey);
+
+    if (!q) {
+      noData.push(ticker);
+      quoteData.push({ ticker, theme, error: 'no data' });
+    } else if (q.error) {
+      networkFailures.push(`${ticker}: ${q.error}`);
+      quoteData.push({ ticker, theme, error: q.error });
+    } else {
+      quoteData.push({ ticker, theme, ...q });
+    }
+
+    // Finnhub free tier: 60 req/min → ~1 req/sec
+    await new Promise(r => setTimeout(r, 1050));
+  }
+
+  // ── 2. Fetch upcoming earnings ─────────────────────────────────────────
+  setProgress(57, 'Fetching earnings calendar…');
+  const earningsMap = {};
+  const earningsFetch = HOLDINGS.map(async ({ ticker }) => {
+    const e = await fetchEarnings(ticker, finnhubKey);
+    if (e) earningsMap[ticker] = e.date;
+  });
+  await Promise.allSettled(earningsFetch);
+
+  // ── 3. Fetch news (sequential to respect rate limit) ──────────────────
+  setProgress(60, 'Fetching news headlines…');
+  const allNews = [];
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const { ticker } = HOLDINGS[i];
+    if (i % 6 === 0) setProgress(60 + Math.round((i / HOLDINGS.length) * 8), `Fetching news: ${ticker}…`);
+    const items = await fetchNews(ticker, finnhubKey);
+    allNews.push(...items);
+    await new Promise(r => setTimeout(r, 300));
+  }
+  // Sort by datetime desc, deduplicate by headline
+  const seenHeadlines = new Set();
+  const newsDigest = allNews
+    .sort((a, b) => b.datetime - a.datetime)
+    .filter(n => {
+      if (seenHeadlines.has(n.headline)) return false;
+      seenHeadlines.add(n.headline);
+      return true;
+    })
+    .slice(0, 20);
+
+  // ── 4. Fetch recommendations & price targets (batched) ────────────────
+  setProgress(68, 'Fetching analyst recommendations…');
+  const recMap = {};
+  const ptMap  = {};
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const { ticker } = HOLDINGS[i];
+    if (i % 5 === 0) setProgress(68 + Math.round((i / HOLDINGS.length) * 8), `Analyst data: ${ticker}…`);
+    const [rec, pt] = await Promise.allSettled([
+      fetchRecommendation(ticker, finnhubKey),
+      fetchPriceTarget(ticker, finnhubKey)
+    ]);
+    if (rec.status === 'fulfilled' && rec.value) recMap[ticker] = rec.value;
+    if (pt.status  === 'fulfilled' && pt.value)  ptMap[ticker]  = pt.value;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  // ── 5. Compute movers ──────────────────────────────────────────────────
+  setProgress(78, 'Computing movers…');
+  const valid = quoteData.filter(q => q.pct != null);
+  const sorted = [...valid].sort((a, b) => b.pct - a.pct);
+  const gainers  = sorted.slice(0, 5);
+  const decliners = sorted.slice(-5).reverse();
+
+  // ── 6. Build prompt & call Claude ─────────────────────────────────────
+  setProgress(82, 'Calling Claude for AI brief…');
+
+  const holdingsSummary = quoteData
+    .filter(q => q.price != null)
+    .map(q => `${q.ticker} (${q.theme}): $${q.price.toFixed(2)}, ${q.pct >= 0 ? '+' : ''}${q.pct?.toFixed(2)}%`)
+    .join('\n');
+
+  const earningsList = Object.entries(earningsMap)
+    .map(([t, d]) => `${t}: ${d}`).join(', ') || 'none found';
+
+  const analystSummary = Object.entries(recMap).map(([t, r]) => {
+    const pt = ptMap[t];
+    const ptStr = pt ? `, price target mean $${pt.mean?.toFixed(0)} (range $${pt.low?.toFixed(0)}–$${pt.high?.toFixed(0)})` : '';
+    return `${t}: Buy=${r.buy} Hold=${r.hold} Sell=${r.sell} StrongBuy=${r.strongBuy} StrongSell=${r.strongSell}${ptStr}`;
+  }).join('\n') || 'none available';
+
+  const newsSummary = newsDigest.slice(0, 10)
+    .map(n => `[${n.ticker}] ${n.headline}`)
+    .join('\n') || 'none today';
+
+  const prompt = `You are a senior portfolio analyst writing a daily close-of-market brief for a sophisticated investor. Write a detailed, editorial-quality narrative of 6–8 substantial paragraphs — do not truncate or cut off mid-sentence. Cover all of the following in flowing prose: overall portfolio tone and breadth, the most consequential individual movers (both up and down) with analysis of likely causes, thematic observations by sector (AI/semis, industrials, financials, healthcare, energy, platforms), any analyst upgrades/downgrades and price target changes worth flagging, significant news (product launches, regulatory decisions, earnings surprises), upcoming earnings dates and their strategic importance, and a forward-looking note on what to watch. Weave analyst actions and news naturally into the narrative. Separate each paragraph with ---. No bullet points. Write every sentence — do not stop early.
+
+Holdings data:
+${holdingsSummary}
+
+Top gainers: ${gainers.map(g => `${g.ticker} ${g.pct?.toFixed(1)}%`).join(', ')}
+Top decliners: ${decliners.map(d => `${d.ticker} ${d.pct?.toFixed(1)}%`).join(', ')}
+
+Analyst consensus (buy/hold/sell counts) and price targets:
+${analystSummary}
+
+Today's news headlines:
+${newsSummary}
+
+Upcoming earnings (next 90 days): ${earningsList}
+
+${networkFailures.length ? `Note: Data unavailable for: ${networkFailures.map(f => f.split(':')[0]).join(', ')}` : ''}
+
+Write the complete brief now. Do not stop until all paragraphs are finished.`;
+
+  let aiBrief = '';
+  let aiError = '';
+
+  // Show report area early so streaming brief can render live
+  setProgress(100, 'Generating AI brief…');
+  const ra = document.getElementById('report-area');
+  ra.style.display = 'block';
+  document.getElementById('progress-area').style.display = 'none';
+
+  const fmt = (n, dec = 2) => n == null ? '<span class="na">n/a</span>' :
+    `<span class="${n >= 0 ? 'up' : 'dn'}">${n >= 0 ? '+' : ''}${n.toFixed(dec)}%</span>`;
+  const fmtP = n => n == null ? '<span class="na">n/a</span>' : `$${n.toFixed(2)}`;
+
+  const networkWarn = networkFailures.length
+    ? `<div class="warn-box"><strong>⚠ Network issues detected</strong><br>
+       The following tickers returned a NetworkError after retrying and were excluded from the brief:<br>
+       <code>${networkFailures.join(' · ')}</code><br>
+       This is typically caused by Finnhub rate-limiting or a transient connection issue. Run again to retry.</div>`
+    : '';
+
+  const newsHTML = newsDigest.length ? `
+    <div class="section">
+      <h3>Today's News &amp; Events</h3>
+      ${newsDigest.map(n => {
+        const t = new Date(n.datetime * 1000);
+        const timeStr = t.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        return `<div class="news-item">
+          <span class="news-ticker-tag">${n.ticker}</span>
+          <a href="${n.url}" target="_blank" rel="noopener">${n.headline}</a>
+          <div class="news-meta">${n.source} · ${timeStr}</div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // Render static sections immediately, brief placeholder added below
+  ra.innerHTML = `
+    <div class="report-header">
+      <h2>Close-of-Market Brief</h2>
+      <p>${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+    </div>
+    ${networkWarn}
+    ${newsHTML}
+    <div class="section" id="brief-section">
+      <h3>AI Brief</h3>
+      <div id="brief-stream" style="font-size:.93rem;line-height:1.85;color:#888;font-style:italic;">Generating narrative…</div>
+    </div>
+    ${buildLowerSections(quoteData, gainers, decliners, earningsMap, noData, networkFailures, fmt, fmtP)}
+  `;
+
+  // ── Stream the Claude brief ────────────────────────────────────────────
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(`Claude API error ${res.status}: ${err.error?.message || res.statusText}`);
+    }
+
+    const briefEl = document.getElementById('brief-stream');
+    briefEl.style.color = '';
+    briefEl.style.fontStyle = '';
+    briefEl.textContent = '';
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') break;
+        try {
+          const evt = JSON.parse(data);
+          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+            aiBrief += evt.delta.text;
+            // Re-render with separator styling every ~200 chars
+            briefEl.innerHTML = aiBrief
+              .split(/\n?---\n?/)
+              .map(p => p.trim())
+              .filter(Boolean)
+              .map(p => `<p style="margin-bottom:1.2em;">${p.replace(/\n/g, '<br>')}</p>`)
+              .join('<hr style="border:none;border-top:1px solid #ddd;margin:1.2em 0;">');
+          }
+        } catch { /* skip malformed lines */ }
+      }
+    }
+  } catch (err) {
+    const briefEl = document.getElementById('brief-stream');
+    if (briefEl) {
+      briefEl.innerHTML = `<div class="error-box"><strong>AI Brief unavailable</strong> ${err.message}</div>`;
+    }
+  }
+}
+
+function buildLowerSections(quoteData, gainers, decliners, earningsMap, noData, networkFailures, fmt, fmtP) {
+  return `
+    <div class="section">
+      <h3>Top Movers</h3>
+      <div class="movers-grid">
+        <div class="mover-col gainers">
+          <h4>Gainers</h4>
+          ${gainers.map(g => `<div style="margin-bottom:6px;font-size:.88rem">
+            <strong>${g.ticker}</strong> ${fmtP(g.price)} ${fmt(g.pct)}</div>`).join('')}
+        </div>
+        <div class="mover-col decliners">
+          <h4>Decliners</h4>
+          ${decliners.map(d => `<div style="margin-bottom:6px;font-size:.88rem">
+            <strong>${d.ticker}</strong> ${fmtP(d.price)} ${fmt(d.pct)}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${Object.keys(earningsMap).length ? `
+    <div class="section">
+      <h3>Upcoming Earnings (next 90 days)</h3>
+      <ul>
+        ${Object.entries(earningsMap).map(([t, d]) =>
+          `<li><strong>${t}</strong> — ${d}</li>`).join('')}
+      </ul>
+    </div>` : ''}
+
+    <div class="section">
+      <h3>All Holdings</h3>
+      <table class="holdings-table">
+        <thead>
+          <tr>
+            <th>Ticker</th><th>Theme</th><th>Price</th>
+            <th>Change</th><th>% Change</th><th>High</th><th>Low</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${quoteData.map(q => q.error
+            ? `<tr>
+                <td><strong>${q.ticker}</strong></td>
+                <td><span class="theme-tag">${q.theme}</span></td>
+                <td colspan="5" class="na" style="font-size:.8rem">⚠ ${q.error === 'no data' ? 'No market data' : 'Fetch error — ' + q.error}</td>
+              </tr>`
+            : `<tr>
+                <td><strong>${q.ticker}</strong></td>
+                <td><span class="theme-tag">${q.theme}</span></td>
+                <td>${fmtP(q.price)}</td>
+                <td>${q.change == null ? '<span class="na">n/a</span>' : `<span class="${q.change >= 0 ? 'up' : 'dn'}">${q.change >= 0 ? '+' : ''}$${Math.abs(q.change).toFixed(2)}</span>`}</td>
+                <td>${fmt(q.pct)}</td>
+                <td>${fmtP(q.high)}</td>
+                <td>${fmtP(q.low)}</td>
+              </tr>`
+          ).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    ${(noData.length || networkFailures.length) ? `
+    <div class="section">
+      <h3>Data Gaps</h3>
+      <p class="data-gaps">
+        ${noData.length ? `No market data returned: ${noData.join(', ')}. ` : ''}
+        ${networkFailures.length ? `Network errors (after retries): ${networkFailures.join(' · ')}` : ''}
+      </p>
+    </div>` : ''}
+
+    <button class="re-run" onclick="location.reload()">↺ Run again</button>
+  `;
+}
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Close-of-Market Brief</title>
+<style>
+  :root {
+    --ink: #1a2e1a;
+    --cream: #f5f0e8;
+    --warm-white: #faf8f4;
+    --gold: #9a7d4a;
+    --mid: #6b6560;
+    --rule: #d4cdc3;
+    --up: #2a6e2a;
+    --dn: #8b2020;
+    --warn: #7a5a00;
+    --warn-bg: #fff8e6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--warm-white);
+    color: var(--ink);
+    font-family: 'Georgia', serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 0;
+  }
+  header {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 18px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 { font-size: 1.1rem; font-weight: normal; letter-spacing: .04em; }
+  #run-date { font-size: .8rem; color: #a0b0a0; font-family: monospace; }
+
+  /* SETUP PANEL */
+  .setup-panel {
+    max-width: 480px;
+    margin: 48px auto;
+    padding: 32px;
+    background: white;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+  }
+  .setup-panel h2 { font-size: 1rem; font-weight: normal; margin-bottom: 24px; color: var(--ink); }
+  label { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; color: var(--mid); margin-bottom: 6px; margin-top: 16px; }
+  input[type="password"], input[type="text"] {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--rule);
+    border-radius: 3px; font-size: .9rem; font-family: monospace;
+    background: var(--warm-white); color: var(--ink);
+  }
+  input:focus { outline: 2px solid var(--gold); border-color: var(--gold); }
+  .run-btn {
+    margin-top: 24px; width: 100%; padding: 12px;
+    background: var(--ink); color: var(--cream);
+    border: none; border-radius: 3px; font-size: .9rem;
+    letter-spacing: .08em; cursor: pointer; transition: opacity .2s;
+  }
+  .run-btn:hover { opacity: .85; }
+  .run-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  /* PROGRESS */
+  #progress-area { display: none; max-width: 480px; margin: 32px auto; padding: 0 32px; }
+  .progress-bar-wrap { background: #e8e4dc; border-radius: 20px; height: 6px; margin-bottom: 10px; }
+  .progress-bar { height: 6px; background: var(--gold); border-radius: 20px; transition: width .3s; }
+  #progress-label { font-size: .82rem; color: var(--mid); }
+
+  /* REPORT */
+  #report-area { display: none; max-width: 860px; margin: 0 auto; padding: 28px; }
+  .report-header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 24px; }
+  .report-header h2 { font-size: 1.3rem; font-weight: normal; }
+  .report-header p { font-size: .83rem; color: var(--mid); margin-top: 4px; }
+
+  .section { margin-bottom: 28px; }
+  .section h3 {
+    font-size: .73rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--mid); border-bottom: 1px solid #ddd;
+    padding-bottom: 6px; margin-bottom: 12px;
+  }
+  .section ul { list-style: none; }
+  .section ul li { padding: 6px 0; border-bottom: 1px solid #f0ede8; font-size: .91rem; line-height: 1.5; }
+  .section ul li:last-child { border-bottom: none; }
+
+  .movers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mover-col h4 { font-size: .73rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; }
+  .gainers h4 { color: var(--up); }
+  .decliners h4 { color: var(--dn); }
+
+  .holdings-table { width: 100%; border-collapse: collapse; font-size: .87rem; }
+  .holdings-table th {
+    text-align: left; padding: 7px 10px;
+    background: var(--ink); color: var(--cream);
+    font-weight: normal; font-size: .73rem;
+    text-transform: uppercase; letter-spacing: .07em;
+  }
+  .holdings-table td { padding: 7px 10px; border-bottom: 1px solid #eee; }
+  .holdings-table tr:hover td { background: #f9f8f4; }
+  .up { color: var(--up); }
+  .dn { color: var(--dn); }
+  .na { color: #aaa; font-style: italic; }
+  .theme-tag { font-size: .7rem; background: #e8e4dc; padding: 1px 6px; border-radius: 10px; color: #666; }
+  .data-gaps { font-size: .82rem; color: #888; font-style: italic; }
+
+  /* ERROR STATES */
+  .error-box {
+    background: #fff3f3; border: 1px solid #f5c6c6;
+    border-radius: 3px; padding: 14px 18px;
+    color: var(--dn); font-size: .88rem; margin-top: 16px;
+  }
+  .error-box strong { display: block; margin-bottom: 4px; }
+  .warn-box {
+    background: var(--warn-bg); border: 1px solid #e0c96a;
+    border-radius: 3px; padding: 10px 14px;
+    color: var(--warn); font-size: .83rem; margin-bottom: 16px;
+  }
+  .warn-box strong { font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+
+  .re-run {
+    margin-top: 24px; font-size: .85rem; color: var(--ink);
+    cursor: pointer; text-decoration: underline;
+    background: none; border: none;
+  }
+
+  /* NEWS DIGEST */
+  .news-item {
+    padding: 9px 0; border-bottom: 1px solid #f0ede8;
+    font-size: .88rem; line-height: 1.5;
+  }
+  .news-item:last-child { border-bottom: none; }
+  .news-item a { color: var(--ink); text-decoration: underline; }
+  .news-item a:hover { color: var(--gold); }
+  .news-meta { font-size: .75rem; color: var(--mid); margin-top: 2px; font-family: monospace; }
+  .news-ticker-tag {
+    font-size: .68rem; background: var(--ink); color: var(--cream);
+    padding: 1px 6px; border-radius: 10px; margin-right: 5px;
+    vertical-align: middle;
+  }
+  /* ANALYST ACTIONS */
+  .analyst-item {
+    padding: 7px 0; border-bottom: 1px solid #f0ede8;
+    font-size: .87rem; display: flex; gap: 10px; align-items: baseline;
+  }
+  .analyst-item:last-child { border-bottom: none; }
+  .rating-up { color: var(--up); font-weight: bold; }
+  .rating-dn { color: var(--dn); font-weight: bold; }
+  .rating-neu { color: var(--mid); font-weight: bold; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Portfolio Close-of-Market Brief</h1>
+  <span id="run-date"></span>
+</header>
+
+<div id="setup" class="setup-panel">
+  <h2>Enter your API keys to generate today's brief</h2>
+
+  <label>Anthropic API Key</label>
+  <input type="password" id="anthropic-key" placeholder="sk-ant-..." autocomplete="off">
+
+  <label>Finnhub API Key</label>
+  <input type="text" id="finnhub-key" placeholder="your finnhub key" autocomplete="off">
+
   <button class="run-btn" id="run-btn" onclick="runAgent()">Generate Brief</button>
 </div>
 
