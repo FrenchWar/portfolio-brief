@@ -6,6 +6,753 @@
 <title>Portfolio Close-of-Market Brief</title>
 <style>
   :root {
+    --ink: #1a2e1a; --cream: #f5f0e8; --warm-white: #faf8f4;
+    --gold: #9a7d4a; --mid: #6b6560; --rule: #d4cdc3;
+    --up: #2a6e2a; --dn: #8b2020; --warn: #7a5a00; --warn-bg: #fff8e6;
+    --add-bg: #eaf4ea; --trim-bg: #fdf0f0; --hold-bg: #f5f3ee;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--warm-white); color:var(--ink); font-family:'Georgia',serif; font-size:15px; line-height:1.6; }
+  header { background:var(--ink); color:var(--cream); padding:18px 28px; display:flex; justify-content:space-between; align-items:center; }
+  header h1 { font-size:1.1rem; font-weight:normal; letter-spacing:.04em; }
+  #run-date { font-size:.8rem; color:#a0b0a0; font-family:monospace; }
+
+  /* SETUP */
+  .setup-panel { max-width:520px; margin:40px auto; padding:32px; background:white; border:1px solid var(--rule); border-radius:4px; }
+  .setup-panel h2 { font-size:1rem; font-weight:normal; margin-bottom:20px; }
+  .setup-panel h3 { font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin:24px 0 12px; border-bottom:1px solid var(--rule); padding-bottom:6px; }
+  label { display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin-bottom:5px; margin-top:14px; }
+  input[type="password"], input[type="text"], input[type="number"] {
+    width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:3px;
+    font-size:.88rem; font-family:monospace; background:var(--warm-white); color:var(--ink);
+  }
+  input[type="number"] { width:80px; text-align:right; }
+  input:focus { outline:2px solid var(--gold); border-color:var(--gold); }
+  .run-btn { margin-top:22px; width:100%; padding:12px; background:var(--ink); color:var(--cream); border:none; border-radius:3px; font-size:.9rem; letter-spacing:.08em; cursor:pointer; transition:opacity .2s; }
+  .run-btn:hover { opacity:.85; }
+  .secondary-btn { margin-top:10px; width:100%; padding:9px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:3px; font-size:.82rem; cursor:pointer; }
+  .secondary-btn:hover { background:var(--cream); }
+
+  /* PORTFOLIO EDITOR */
+  .portfolio-editor { display:none; }
+  .pe-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px; margin-top:8px; }
+  .pe-row { display:flex; align-items:center; gap:8px; padding:5px 8px; background:var(--warm-white); border:1px solid var(--rule); border-radius:3px; }
+  .pe-ticker { font-size:.82rem; font-weight:bold; width:42px; flex-shrink:0; }
+  .pe-theme { font-size:.68rem; color:var(--mid); flex:1; }
+  .pe-shares { width:72px; flex-shrink:0; }
+
+  /* PORTFOLIO SUMMARY BANNER */
+  .port-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:4px; overflow:hidden; margin-bottom:24px; }
+  .port-summary-cell { background:white; padding:14px 16px; }
+  .port-summary-cell .label { font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin-bottom:4px; }
+  .port-summary-cell .value { font-size:1.15rem; font-weight:bold; }
+  .port-summary-cell .sub { font-size:.75rem; color:var(--mid); margin-top:2px; }
+
+  /* PROGRESS */
+  #progress-area { display:none; max-width:480px; margin:32px auto; padding:0 32px; }
+  .progress-bar-wrap { background:#e8e4dc; border-radius:20px; height:6px; margin-bottom:10px; }
+  .progress-bar { height:6px; background:var(--gold); border-radius:20px; transition:width .3s; }
+  #progress-label { font-size:.82rem; color:var(--mid); }
+
+  /* REPORT */
+  #report-area { display:none; max-width:980px; margin:0 auto; padding:28px; }
+  .report-header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:24px; }
+  .report-header h2 { font-size:1.3rem; font-weight:normal; }
+  .report-header p { font-size:.83rem; color:var(--mid); margin-top:4px; }
+  .section { margin-bottom:28px; }
+  .section h3 { font-size:.73rem; text-transform:uppercase; letter-spacing:.12em; color:var(--mid); border-bottom:1px solid #ddd; padding-bottom:6px; margin-bottom:12px; }
+  .section ul { list-style:none; }
+  .section ul li { padding:6px 0; border-bottom:1px solid #f0ede8; font-size:.91rem; line-height:1.5; }
+  .section ul li:last-child { border-bottom:none; }
+  .movers-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .mover-col h4 { font-size:.73rem; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; }
+  .gainers h4 { color:var(--up); } .decliners h4 { color:var(--dn); }
+
+  /* HOLDINGS TABLE */
+  .tbl-wrap { overflow-x:auto; }
+  .holdings-table { width:100%; border-collapse:collapse; font-size:.79rem; white-space:nowrap; }
+  .holdings-table th { text-align:left; padding:6px 7px; background:var(--ink); color:var(--cream); font-weight:normal; font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; }
+  .holdings-table td { padding:5px 7px; border-bottom:1px solid #eee; vertical-align:middle; }
+  .holdings-table tr:hover td { background:#f9f8f4; }
+  .up { color:var(--up); } .dn { color:var(--dn); } .na { color:#aaa; font-style:italic; }
+  .theme-tag { font-size:.63rem; background:#e8e4dc; padding:1px 5px; border-radius:10px; color:#666; white-space:nowrap; }
+  .badge { font-size:.65rem; font-weight:bold; padding:2px 6px; border-radius:10px; white-space:nowrap; }
+  .badge-add  { background:var(--add-bg);  color:var(--up); border:1px solid #b8ddb8; }
+  .badge-trim { background:var(--trim-bg); color:var(--dn); border:1px solid #ddb8b8; }
+  .badge-hold { background:var(--hold-bg); color:var(--mid); border:1px solid #ccc; }
+  .vol-high { font-size:.68rem; color:var(--warn); font-weight:bold; }
+  .beat { color:var(--up); font-size:.75rem; } .miss { color:var(--dn); font-size:.75rem; }
+
+  /* NEWS */
+  .news-item { padding:9px 0; border-bottom:1px solid #f0ede8; font-size:.88rem; line-height:1.5; }
+  .news-item:last-child { border-bottom:none; }
+  .news-item a { color:var(--ink); text-decoration:underline; }
+  .news-item a:hover { color:var(--gold); }
+  .news-meta { font-size:.75rem; color:var(--mid); margin-top:2px; font-family:monospace; }
+  .news-ticker-tag { font-size:.66rem; background:var(--ink); color:var(--cream); padding:1px 6px; border-radius:10px; margin-right:5px; vertical-align:middle; }
+
+  .error-box { background:#fff3f3; border:1px solid #f5c6c6; border-radius:3px; padding:14px 18px; color:var(--dn); font-size:.88rem; margin-top:16px; }
+  .warn-box { background:var(--warn-bg); border:1px solid #e0c96a; border-radius:3px; padding:10px 14px; color:var(--warn); font-size:.83rem; margin-bottom:16px; }
+  .warn-box strong { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; }
+  .re-run { margin-top:24px; font-size:.85rem; color:var(--ink); cursor:pointer; text-decoration:underline; background:none; border:none; }
+  .data-gaps { font-size:.82rem; color:#888; font-style:italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Portfolio Close-of-Market Brief</h1>
+  <span id="run-date"></span>
+</header>
+
+<div id="setup" class="setup-panel">
+  <h2>Enter your API keys to generate today's brief</h2>
+  <label>Anthropic API Key</label>
+  <input type="password" id="anthropic-key" placeholder="sk-ant-..." autocomplete="off">
+  <label>Finnhub API Key</label>
+  <input type="text" id="finnhub-key" placeholder="your finnhub key" autocomplete="off">
+  <div style="margin-top:14px;display:flex;align-items:center;gap:8px;">
+    <input type="checkbox" id="remember-keys" style="width:auto;cursor:pointer;">
+    <label for="remember-keys" style="margin:0;text-transform:none;font-size:.82rem;letter-spacing:0;color:var(--mid);cursor:pointer;">Remember my keys on this device</label>
+  </div>
+  <div id="keys-saved-note" style="display:none;margin-top:8px;font-size:.75rem;color:var(--mid);text-align:center;">
+    Keys remembered — <span onclick="clearSavedKeys()" style="cursor:pointer;text-decoration:underline;">clear</span>
+  </div>
+
+  <div class="setup-panel" style="margin:0;padding:0;border:none;background:none;">
+    <h3>Portfolio Positions</h3>
+    <p style="font-size:.8rem;color:var(--mid);margin-bottom:12px;">Enter shares held. Saved locally on this device.</p>
+    <div class="pe-grid" id="pe-grid"></div>
+    <button class="secondary-btn" onclick="saveShares()">Save Positions</button>
+    <div id="shares-saved-note" style="display:none;font-size:.75rem;color:var(--up);text-align:center;margin-top:6px;">✓ Positions saved</div>
+  </div>
+
+  <button class="run-btn" onclick="runAgent()">Generate Brief</button>
+</div>
+
+<div id="progress-area">
+  <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
+  <div id="progress-label">Starting…</div>
+</div>
+<div id="report-area"></div>
+
+<script>
+// ── Holdings master list ────────────────────────────────────────────────────
+const HOLDINGS = [
+  {ticker:'NVDA',theme:'AI/Semi'},{ticker:'TSM',theme:'AI/Semi'},{ticker:'ASML',theme:'AI/Semi'},
+  {ticker:'AVGO',theme:'AI/Semi'},{ticker:'QCOM',theme:'AI/Semi'},{ticker:'CSCO',theme:'AI/Semi'},
+  {ticker:'DELL',theme:'AI/Semi'},{ticker:'CRWD',theme:'AI/Semi'},{ticker:'VEEV',theme:'AI/Semi'},
+  {ticker:'AAPL',theme:'Platform'},{ticker:'AMZN',theme:'Platform'},{ticker:'BABA',theme:'Platform'},
+  {ticker:'WMT',theme:'Platform'},{ticker:'DASH',theme:'Platform'},{ticker:'NKE',theme:'Platform'},
+  {ticker:'NYT',theme:'Platform'},{ticker:'GE',theme:'Industrial'},{ticker:'BA',theme:'Industrial'},
+  {ticker:'CAT',theme:'Industrial'},{ticker:'DAL',theme:'Industrial'},{ticker:'FDX',theme:'Industrial'},
+  {ticker:'WAB',theme:'Industrial'},{ticker:'XOM',theme:'Energy'},{ticker:'CVX',theme:'Energy'},
+  {ticker:'COP',theme:'Energy'},{ticker:'SO',theme:'Energy'},{ticker:'BEP',theme:'Energy'},
+  {ticker:'BEPC',theme:'Energy'},{ticker:'BAC',theme:'Financials'},{ticker:'JPM',theme:'Financials'},
+  {ticker:'SPGI',theme:'Financials'},{ticker:'COWZ',theme:'Financials'},{ticker:'VRTX',theme:'Health'},
+  {ticker:'JNJ',theme:'Health'},{ticker:'PFE',theme:'Health'},{ticker:'BMY',theme:'Health'},
+  {ticker:'VTRS',theme:'Health'},{ticker:'PKX',theme:'Materials'},
+];
+
+// ── Persistence ─────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  buildPortfolioEditor();
+  try {
+    const ak = localStorage.getItem('pb_anthropic_key');
+    const fk = localStorage.getItem('pb_finnhub_key');
+    if (ak) {
+      document.getElementById('anthropic-key').value = ak;
+      document.getElementById('finnhub-key').value = fk || '';
+      document.getElementById('remember-keys').checked = true;
+      document.getElementById('keys-saved-note').style.display = 'block';
+    }
+  } catch(e) {}
+  loadShares();
+});
+
+function clearSavedKeys() {
+  try {
+    localStorage.removeItem('pb_anthropic_key');
+    localStorage.removeItem('pb_finnhub_key');
+    document.getElementById('anthropic-key').value = '';
+    document.getElementById('finnhub-key').value = '';
+    document.getElementById('remember-keys').checked = false;
+    document.getElementById('keys-saved-note').style.display = 'none';
+  } catch(e) {}
+}
+
+function buildPortfolioEditor() {
+  const grid = document.getElementById('pe-grid');
+  grid.innerHTML = HOLDINGS.map(h => `
+    <div class="pe-row">
+      <span class="pe-ticker">${h.ticker}</span>
+      <span class="pe-theme">${h.theme}</span>
+      <input type="number" class="pe-shares" id="sh-${h.ticker}" min="0" step="1" value="0" placeholder="0">
+    </div>`).join('');
+}
+
+function saveShares() {
+  try {
+    const shares = {};
+    HOLDINGS.forEach(h => {
+      const v = parseInt(document.getElementById('sh-'+h.ticker)?.value || '0');
+      if (v > 0) shares[h.ticker] = v;
+    });
+    localStorage.setItem('pb_shares', JSON.stringify(shares));
+    const note = document.getElementById('shares-saved-note');
+    note.style.display = 'block';
+    setTimeout(() => note.style.display = 'none', 2500);
+  } catch(e) {}
+}
+
+function loadShares() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('pb_shares') || '{}');
+    HOLDINGS.forEach(h => {
+      const el = document.getElementById('sh-'+h.ticker);
+      if (el && saved[h.ticker]) el.value = saved[h.ticker];
+    });
+  } catch(e) {}
+}
+
+function getShares() {
+  const shares = {};
+  HOLDINGS.forEach(h => {
+    const v = parseInt(document.getElementById('sh-'+h.ticker)?.value || '0');
+    shares[h.ticker] = v || 0;
+  });
+  return shares;
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function setProgress(pct, label) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+async function fetchWithTimeout(url, opts={}, ms=8000, retries=2) {
+  for (let i=0; i<=retries; i++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), ms);
+    try {
+      const res = await fetch(url, {...opts, signal:ctrl.signal});
+      clearTimeout(t); return res;
+    } catch(err) {
+      clearTimeout(t);
+      if (i < retries && (err.name==='TypeError'||err.name==='AbortError')) {
+        await new Promise(r=>setTimeout(r, 600*(i+1))); continue;
+      }
+      throw err;
+    }
+  }
+}
+
+// ── Finnhub fetchers ─────────────────────────────────────────────────────────
+async function fetchQuote(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${key}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    if (!d.c || d.c===0) return null;
+    return {price:d.c, change:d.d, pct:d.dp, high:d.h, low:d.l, prevClose:d.pc, volume:d.v};
+  } catch(e) { return {error:e.message||'NetworkError'}; }
+}
+
+async function fetchBasicFinancials(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json(); const m = d.metric||{};
+    return {
+      pe:           m['peNormalizedAnnual']||m['peTTM']||null,
+      forwardPE:    m['forwardPE']||null,
+      revenueGrowth:m['revenueGrowthTTMYoy']||null,
+      epsGrowth:    m['epsGrowthTTMYoy']||null,
+      netMargin:    m['netProfitMarginTTM']||null,
+      roe:          m['roeTTM']||null,
+      debtToEquity: m['totalDebt/totalEquityAnnual']||null,
+      currentRatio: m['currentRatioAnnual']||null,
+      week52High:   m['52WeekHigh']||null,
+      week52Low:    m['52WeekLow']||null,
+      avgVol10d:    m['10DayAverageTradingVolume']||null,
+      beta:         m['beta']||null,
+    };
+  } catch(e) { return null; }
+}
+
+async function fetchEarningsSurprises(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/earnings?symbol=${ticker}&limit=4&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d||!d.length) return null;
+    return d.slice(0,4).map(e => ({
+      period:   e.period,
+      actual:   e.actual,
+      estimate: e.estimate,
+      surprise: e.surprise,
+      surprisePct: e.surprisePercent,
+    }));
+  } catch(e) { return null; }
+}
+
+async function fetchShortInterest(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/short-interest?symbol=${ticker}&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const latest = d?.data?.[0];
+    if (!latest) return null;
+    return {
+      shortPct: latest.shortInterestRatio||null,
+      sharesShort: latest.shortInterest||null,
+    };
+  } catch(e) { return null; }
+}
+
+async function fetchInsider(ticker, key) {
+  try {
+    const to=new Date(), from=new Date(); from.setDate(from.getDate()-30);
+    const fmt=d=>d.toISOString().split('T')[0];
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/insider-transactions?symbol=${ticker}&from=${fmt(from)}&to=${fmt(to)}&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    const txns=(d.data||[]).filter(t=>t.transactionType==='P-Purchase'||t.transactionType==='S-Sale');
+    if (!txns.length) return null;
+    const buys=txns.filter(t=>t.transactionType==='P-Purchase');
+    const sells=txns.filter(t=>t.transactionType==='S-Sale');
+    return {buys:buys.length, sells:sells.length, net:buys.length-sells.length};
+  } catch(e) { return null; }
+}
+
+async function fetchEarningsCalendar(ticker, key) {
+  try {
+    const from=new Date(), to=new Date(); to.setDate(to.getDate()+90);
+    const fmt=d=>d.toISOString().split('T')[0];
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/calendar/earnings?from=${fmt(from)}&to=${fmt(to)}&symbol=${ticker}&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d.earningsCalendar?.[0]||null;
+  } catch(e) { return null; }
+}
+
+async function fetchNews(ticker, key) {
+  try {
+    const from=new Date(); from.setDate(from.getDate()-1);
+    const to=new Date();
+    const fmt=d=>d.toISOString().split('T')[0];
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${fmt(from)}&to=${fmt(to)}&token=${key}`);
+    if (!res.ok) return [];
+    const items=await res.json();
+    return (items||[]).slice(0,2).map(n=>({ticker,headline:n.headline,url:n.url,source:n.source,datetime:n.datetime}));
+  } catch(e) { return []; }
+}
+
+async function fetchRecommendation(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/recommendation?symbol=${ticker}&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json(); return d?.[0]||null;
+  } catch(e) { return null; }
+}
+
+async function fetchPriceTarget(ticker, key) {
+  try {
+    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/price-target?symbol=${ticker}&token=${key}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d?.targetMean) return null;
+    return {low:d.targetLow, high:d.targetHigh, mean:d.targetMean};
+  } catch(e) { return null; }
+}
+
+// ── Main agent ───────────────────────────────────────────────────────────────
+async function runAgent() {
+  const anthropicKey = document.getElementById('anthropic-key').value.trim();
+  const finnhubKey   = document.getElementById('finnhub-key').value.trim();
+  if (!anthropicKey||!finnhubKey) { alert('Please enter both API keys.'); return; }
+
+  try {
+    if (document.getElementById('remember-keys').checked) {
+      localStorage.setItem('pb_anthropic_key', anthropicKey);
+      localStorage.setItem('pb_finnhub_key', finnhubKey);
+    } else {
+      localStorage.removeItem('pb_anthropic_key');
+      localStorage.removeItem('pb_finnhub_key');
+    }
+  } catch(e) {}
+
+  const shares = getShares();
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('progress-area').style.display = 'block';
+  document.getElementById('run-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  const quoteData=[], networkFailures=[], noData=[];
+  const fundamentals={}, surprises={}, shortMap={}, insiderMap={}, earningsMap={}, recMap={}, ptMap={};
+
+  // 1. Quotes
+  for (let i=0;i<HOLDINGS.length;i++) {
+    const {ticker,theme}=HOLDINGS[i];
+    setProgress(Math.round((i/HOLDINGS.length)*20), `Quotes: ${ticker} (${i+1}/${HOLDINGS.length})…`);
+    const q = await fetchQuote(ticker,finnhubKey);
+    if (!q)        { noData.push(ticker); quoteData.push({ticker,theme,error:'no data'}); }
+    else if(q.error){ networkFailures.push(`${ticker}: ${q.error}`); quoteData.push({ticker,theme,error:q.error}); }
+    else           { quoteData.push({ticker,theme,...q}); }
+    await new Promise(r=>setTimeout(r,1050));
+  }
+
+  // 2. Basic financials
+  for (let i=0;i<HOLDINGS.length;i++) {
+    const {ticker}=HOLDINGS[i];
+    setProgress(20+Math.round((i/HOLDINGS.length)*15), `Fundamentals: ${ticker}…`);
+    const f = await fetchBasicFinancials(ticker,finnhubKey);
+    if (f) fundamentals[ticker]=f;
+    await new Promise(r=>setTimeout(r,1050));
+  }
+
+  // 3. Earnings surprises
+  for (let i=0;i<HOLDINGS.length;i++) {
+    const {ticker}=HOLDINGS[i];
+    setProgress(35+Math.round((i/HOLDINGS.length)*12), `Earnings history: ${ticker}…`);
+    const s = await fetchEarningsSurprises(ticker,finnhubKey);
+    if (s) surprises[ticker]=s;
+    await new Promise(r=>setTimeout(r,1050));
+  }
+
+  // 4. Short interest
+  for (let i=0;i<HOLDINGS.length;i++) {
+    const {ticker}=HOLDINGS[i];
+    if (i%6===0) setProgress(47+Math.round((i/HOLDINGS.length)*8), `Short interest: ${ticker}…`);
+    const s = await fetchShortInterest(ticker,finnhubKey);
+    if (s) shortMap[ticker]=s;
+    await new Promise(r=>setTimeout(r,800));
+  }
+
+  // 5. Insider
+  for (let i=0;i<HOLDINGS.length;i++) {
+    const {ticker}=HOLDINGS[i];
+    if (i%6===0) setProgress(55+Math.round((i/HOLDINGS.length)*6), `Insider: ${ticker}…`);
+    const ins = await fetchInsider(ticker,finnhubKey);
+    if (ins) insiderMap[ticker]=ins;
+    await new Promise(r=>setTimeout(r,1050));
+  }
+
+  // 6. Earnings calendar
+  setProgress(61, 'Earnings calendar…');
+  for (const {ticker} of HOLDINGS) {
+    const e = await fetchEarningsCalendar(ticker,finnhubKey);
+    if (e) earningsMap[ticker]=e.date;
+    await new Promise(r=>setTimeout(r,400));
+  }
+
+  // 7. News
+  setProgress(65, 'News headlines…');
+  const allNews=[];
+  for (const {ticker} of HOLDINGS) {
+    const items = await fetchNews(ticker,finnhubKey);
+    allNews.push(...items);
+    await new Promise(r=>setTimeout(r,300));
+  }
+  const seenH=new Set();
+  const newsDigest=allNews.sort((a,b)=>b.datetime-a.datetime)
+    .filter(n=>{ if(seenH.has(n.headline))return false; seenH.add(n.headline); return true; })
+    .slice(0,20);
+
+  // 8. Recommendations & price targets
+  setProgress(70, 'Analyst data…');
+  for (const {ticker} of HOLDINGS) {
+    const [rec,pt]=await Promise.allSettled([fetchRecommendation(ticker,finnhubKey),fetchPriceTarget(ticker,finnhubKey)]);
+    if (rec.status==='fulfilled'&&rec.value) recMap[ticker]=rec.value;
+    if (pt.status==='fulfilled'&&pt.value)   ptMap[ticker]=pt.value;
+    await new Promise(r=>setTimeout(r,500));
+  }
+
+  // 9. Compute movers, volume flags, portfolio totals
+  setProgress(80,'Computing…');
+  const valid=quoteData.filter(q=>q.pct!=null);
+  const sorted=[...valid].sort((a,b)=>b.pct-a.pct);
+  const gainers=sorted.slice(0,5), decliners=sorted.slice(-5).reverse();
+
+  const volumeFlags={};
+  for (const q of valid) {
+    const f=fundamentals[q.ticker];
+    if (f?.avgVol10d&&q.volume) {
+      const ratio=q.volume/(f.avgVol10d*1e6);
+      if (ratio>1.5) volumeFlags[q.ticker]=ratio.toFixed(1);
+    }
+  }
+
+  // Portfolio value calculations
+  let totalValue=0, totalDayChange=0, positionValues={};
+  for (const q of valid) {
+    const sh=shares[q.ticker]||0;
+    if (sh>0) {
+      const val=sh*q.price;
+      const dayChg=sh*(q.change||0);
+      positionValues[q.ticker]=val;
+      totalValue+=val;
+      totalDayChange+=dayChg;
+    }
+  }
+  const totalDayPct=totalValue>0?(totalDayChange/(totalValue-totalDayChange))*100:0;
+  const hasPortfolioData=totalValue>0;
+
+  // 10. Build prompt
+  setProgress(84,'Building prompt…');
+  const holdingsSummary=quoteData.filter(q=>q.price!=null).map(q=>{
+    const f=fundamentals[q.ticker]||{};
+    const pt=ptMap[q.ticker];
+    const ins=insiderMap[q.ticker];
+    const sh=shares[q.ticker]||0;
+    const posVal=positionValues[q.ticker];
+    const surp=surprises[q.ticker];
+    const si=shortMap[q.ticker];
+
+    const parts=[`${q.ticker} (${q.theme}): $${q.price.toFixed(2)} ${q.pct>=0?'+':''}${q.pct?.toFixed(2)}%`];
+    if (sh>0) parts.push(`${sh} shares ($${posVal?.toFixed(0)})`);
+    if (f.week52High) parts.push(`52wk $${f.week52Low?.toFixed(0)}-$${f.week52High?.toFixed(0)}`);
+    if (f.pe!=null) parts.push(`P/E ${f.pe.toFixed(1)}`);
+    if (f.forwardPE!=null) parts.push(`fwdP/E ${f.forwardPE.toFixed(1)}`);
+    if (f.revenueGrowth!=null) parts.push(`RevGr ${(f.revenueGrowth*100).toFixed(1)}%`);
+    if (f.epsGrowth!=null) parts.push(`EPSGr ${(f.epsGrowth*100).toFixed(1)}%`);
+    if (f.netMargin!=null) parts.push(`Margin ${(f.netMargin*100).toFixed(1)}%`);
+    if (f.roe!=null) parts.push(`ROE ${(f.roe*100).toFixed(1)}%`);
+    if (f.debtToEquity!=null) parts.push(`D/E ${f.debtToEquity.toFixed(2)}`);
+    if (f.beta!=null) parts.push(`Beta ${f.beta.toFixed(2)}`);
+    if (pt) parts.push(`PT $${pt.mean?.toFixed(0)} ($${pt.low?.toFixed(0)}-$${pt.high?.toFixed(0)})`);
+    if (si?.shortPct) parts.push(`Short ${si.shortPct.toFixed(1)}%`);
+    if (ins) parts.push(`Insider ${ins.buys}B/${ins.sells}S`);
+    if (volumeFlags[q.ticker]) parts.push(`⚠Vol ${volumeFlags[q.ticker]}x`);
+    if (surp?.length) {
+      const trend=surp.map(e=>e.surprisePct!=null?`${e.surprisePct>0?'+':''}${e.surprisePct.toFixed(1)}%`:'n/a').join(', ');
+      parts.push(`EPS surprises(last 4Q): ${trend}`);
+    }
+    return parts.join(' | ');
+  }).join('\n');
+
+  const analystSummary=Object.entries(recMap).map(([t,r])=>
+    `${t}: SBuy=${r.strongBuy} Buy=${r.buy} Hold=${r.hold} Sell=${r.sell} SSell=${r.strongSell}`
+  ).join('\n')||'none';
+
+  const earningsList=Object.entries(earningsMap).map(([t,d])=>`${t}: ${d}`).join(', ')||'none';
+  const newsSummary=newsDigest.slice(0,10).map(n=>`[${n.ticker}] ${n.headline}`).join('\n')||'none today';
+  const portContext=hasPortfolioData?`Total portfolio value: $${totalValue.toFixed(0)}, day P&L: ${totalDayChange>=0?'+':''}$${totalDayChange.toFixed(0)} (${totalDayPct>=0?'+':''}${totalDayPct.toFixed(2)}%)`:'(share counts not provided)';
+
+  const prompt=`You are a senior portfolio analyst writing a daily close-of-market brief for a sophisticated investor. Write a detailed, editorial-quality narrative of 8–10 substantial paragraphs separated by ---. Do not truncate or stop early — write every paragraph completely.
+
+Cover in flowing prose: (1) Executive summary — portfolio value, day P&L, and overall tone in 3-4 sentences. (2) Most consequential movers with analysis referencing fundamentals, EPS surprise history, and debt metrics where relevant. (3) Unusual volume flags and their significance. (4) Short interest — flag any high short interest positions and what it signals. (5) Insider activity. (6) Analyst consensus, upgrades/downgrades, price targets vs current price. (7) Thematic sector observations. (8) Significant news — product launches, regulatory decisions, earnings surprises. (9) Upcoming earnings and strategic importance. (10) Hold/Add/Trim rating for EVERY position with brief justification, followed by a forward-looking note.
+
+Add/Trim/Hold criteria: Add = strong fundamentals + attractive valuation + positive momentum or catalyst. Trim = deteriorating fundamentals, high D/E, stretched valuation, or negative catalyst. Hold = everything else. High short interest (>10%) should be flagged as a risk factor. Negative EPS surprise trend (3+ consecutive misses) warrants Trim consideration.
+
+Portfolio context: ${portContext}
+
+Holdings (price | shares+value | 52wk | P/E | fwdP/E | RevGr | EPSGr | Margin | ROE | D/E | Beta | PT | Short% | Insider | Vol | EPS surprises):
+${holdingsSummary}
+
+Analyst consensus:
+${analystSummary}
+
+News: ${newsSummary}
+Upcoming earnings: ${earningsList}
+${networkFailures.length?`Data unavailable: ${networkFailures.map(f=>f.split(':')[0]).join(', ')}`:''}
+
+Write the complete brief now. Do not stop until all 10 sections including every Hold/Add/Trim rating are finished.`;
+
+  // 11. Render static sections + stream brief
+  setProgress(100,'Generating AI brief…');
+  const ra=document.getElementById('report-area');
+  ra.style.display='block';
+  document.getElementById('progress-area').style.display='none';
+
+  const fmt=(n,dec=2)=>n==null?'<span class="na">—</span>':`<span class="${n>=0?'up':'dn'}">${n>=0?'+':''}${n.toFixed(dec)}%</span>`;
+  const fmtP=n=>n==null?'<span class="na">—</span>':`$${n.toFixed(2)}`;
+  const fmtN=(n,dec=1)=>n==null?'<span class="na">—</span>':n.toFixed(dec);
+  const dollar=n=>n==null?'<span class="na">—</span>':`$${Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+
+  const networkWarn=networkFailures.length?`<div class="warn-box"><strong>⚠ Network issues</strong> Data unavailable for: ${networkFailures.map(f=>f.split(':')[0]).join(', ')}. Run again to retry.</div>`:'';
+
+  const portfolioBanner=hasPortfolioData?`
+    <div class="port-summary">
+      <div class="port-summary-cell">
+        <div class="label">Portfolio Value</div>
+        <div class="value">${dollar(totalValue)}</div>
+        <div class="sub">as of close</div>
+      </div>
+      <div class="port-summary-cell">
+        <div class="label">Day P&amp;L</div>
+        <div class="value ${totalDayChange>=0?'up':'dn'}">${totalDayChange>=0?'+':'−'}${dollar(Math.abs(totalDayChange))}</div>
+        <div class="sub">${fmt(totalDayPct)}</div>
+      </div>
+      <div class="port-summary-cell">
+        <div class="label">Positions</div>
+        <div class="value">${Object.keys(positionValues).length}</div>
+        <div class="sub">of ${HOLDINGS.length} holdings</div>
+      </div>
+      <div class="port-summary-cell">
+        <div class="label">Largest Position</div>
+        <div class="value" style="font-size:.95rem;">${Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—'}</div>
+        <div class="sub">${Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0]?dollar(Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0][1]):''}</div>
+      </div>
+    </div>`:'' ;
+
+  const newsHTML=newsDigest.length?`
+    <div class="section"><h3>Today's News &amp; Events</h3>
+      ${newsDigest.map(n=>{
+        const t=new Date(n.datetime*1000);
+        const ts=t.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+        return `<div class="news-item"><span class="news-ticker-tag">${n.ticker}</span><a href="${n.url}" target="_blank" rel="noopener">${n.headline}</a><div class="news-meta">${n.source} · ${ts}</div></div>`;
+      }).join('')}
+    </div>`:'';
+
+  // Build holdings table
+  const holdingsTableHTML=`
+    <div class="section"><h3>All Holdings</h3>
+    <div class="tbl-wrap">
+    <table class="holdings-table">
+      <thead><tr>
+        <th>Ticker</th><th>Theme</th><th>Shares</th><th>Value</th>
+        <th>Price</th><th>Day%</th><th>Day$</th><th>Wt%</th>
+        <th>P/E</th><th>FwdPE</th><th>RevGr</th><th>EPSGr</th>
+        <th>Margin</th><th>ROE</th><th>D/E</th><th>Beta</th>
+        <th>52wLo</th><th>52wHi</th><th>PT</th>
+        <th>Short%</th><th>EPS Surp 4Q</th><th>Insider</th><th>Vol</th><th>Rating</th>
+      </tr></thead>
+      <tbody>
+        ${quoteData.map(q=>{
+          if (q.error) return `<tr><td><strong>${q.ticker}</strong></td><td><span class="theme-tag">${q.theme}</span></td><td colspan="22" class="na" style="font-size:.75rem">⚠ ${q.error==='no data'?'No market data':'Fetch error'}</td></tr>`;
+          const f=fundamentals[q.ticker]||{};
+          const pt=ptMap[q.ticker];
+          const ins=insiderMap[q.ticker];
+          const si=shortMap[q.ticker];
+          const surp=surprises[q.ticker];
+          const sh=shares[q.ticker]||0;
+          const pv=positionValues[q.ticker]||0;
+          const wt=totalValue>0&&pv>0?(pv/totalValue*100).toFixed(1):null;
+          const dayDollar=sh>0?sh*(q.change||0):null;
+          const insColor=ins?(ins.net>0?'color:var(--up)':ins.net<0?'color:var(--dn)':''):'';
+          const surpHTML=surp?surp.map(e=>{
+            if (e.surprisePct==null) return '<span class="na">—</span>';
+            return `<span class="${e.surprisePct>=0?'beat':'miss'}">${e.surprisePct>=0?'+':''}${e.surprisePct.toFixed(1)}%</span>`;
+          }).join(' '):' <span class="na">—</span>';
+          return `<tr>
+            <td><strong>${q.ticker}</strong></td>
+            <td><span class="theme-tag">${q.theme}</span></td>
+            <td>${sh>0?sh.toLocaleString():'<span class="na">—</span>'}</td>
+            <td>${pv>0?dollar(pv):'<span class="na">—</span>'}</td>
+            <td>${fmtP(q.price)}</td>
+            <td>${fmt(q.pct)}</td>
+            <td>${dayDollar!=null?`<span class="${dayDollar>=0?'up':'dn'}">${dayDollar>=0?'+':'−'}$${Math.abs(dayDollar).toFixed(0)}</span>`:'<span class="na">—</span>'}</td>
+            <td>${wt?`${wt}%`:'<span class="na">—</span>'}</td>
+            <td>${f.pe!=null?f.pe.toFixed(1):'<span class="na">—</span>'}</td>
+            <td>${f.forwardPE!=null?f.forwardPE.toFixed(1):'<span class="na">—</span>'}</td>
+            <td>${f.revenueGrowth!=null?`${(f.revenueGrowth*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
+            <td>${f.epsGrowth!=null?`${(f.epsGrowth*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
+            <td>${f.netMargin!=null?`${(f.netMargin*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
+            <td>${f.roe!=null?`${(f.roe*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
+            <td>${f.debtToEquity!=null?f.debtToEquity.toFixed(2):'<span class="na">—</span>'}</td>
+            <td>${f.beta!=null?f.beta.toFixed(2):'<span class="na">—</span>'}</td>
+            <td>${f.week52Low!=null?'$'+f.week52Low.toFixed(0):'<span class="na">—</span>'}</td>
+            <td>${f.week52High!=null?'$'+f.week52High.toFixed(0):'<span class="na">—</span>'}</td>
+            <td>${pt?'$'+pt.mean.toFixed(0):'<span class="na">—</span>'}</td>
+            <td>${si?.shortPct!=null?`${si.shortPct.toFixed(1)}%`:'<span class="na">—</span>'}</td>
+            <td style="font-size:.72rem;">${surpHTML}</td>
+            <td style="${insColor}">${ins?`${ins.buys}B/${ins.sells}S`:'<span class="na">—</span>'}</td>
+            <td>${volumeFlags[q.ticker]?`<span class="vol-high">⚑${volumeFlags[q.ticker]}x</span>`:'<span class="na">—</span>'}</td>
+            <td id="rating-${q.ticker}"><span class="na">…</span></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div></div>
+    ${(noData.length||networkFailures.length)?`<div class="section"><p class="data-gaps">${noData.length?'No data: '+noData.join(', ')+'. ':''}${networkFailures.length?'Errors: '+networkFailures.join(' · '):''}</p></div>`:''}
+    <button class="re-run" onclick="location.reload()">↺ Run again</button>`;
+
+  ra.innerHTML=`
+    <div class="report-header">
+      <h2>Close-of-Market Brief</h2>
+      <p>${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+    </div>
+    ${networkWarn}
+    ${portfolioBanner}
+    ${newsHTML}
+    <div class="section">
+      <h3>Top Movers</h3>
+      <div class="movers-grid">
+        <div class="mover-col gainers"><h4>Gainers</h4>
+          ${gainers.map(g=>`<div style="margin-bottom:6px;font-size:.88rem"><strong>${g.ticker}</strong> ${fmtP(g.price)} ${fmt(g.pct)}</div>`).join('')}
+        </div>
+        <div class="mover-col decliners"><h4>Decliners</h4>
+          ${decliners.map(d=>`<div style="margin-bottom:6px;font-size:.88rem"><strong>${d.ticker}</strong> ${fmtP(d.price)} ${fmt(d.pct)}</div>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${Object.keys(earningsMap).length?`<div class="section"><h3>Upcoming Earnings (90 days)</h3><ul>${Object.entries(earningsMap).map(([t,d])=>`<li><strong>${t}</strong> — ${d}</li>`).join('')}</ul></div>`:''}
+    <div class="section" id="brief-section">
+      <h3>AI Brief</h3>
+      <div id="brief-stream" style="font-size:.93rem;line-height:1.85;color:#888;font-style:italic;">Generating narrative…</div>
+    </div>
+    ${holdingsTableHTML}`;
+
+  // Stream Claude
+  try {
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':anthropicKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:4000,stream:true,messages:[{role:'user',content:prompt}]})
+    });
+    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(`Claude API ${res.status}: ${e.error?.message||res.statusText}`); }
+
+    const briefEl=document.getElementById('brief-stream');
+    briefEl.style.color=''; briefEl.style.fontStyle=''; briefEl.textContent='';
+    const reader=res.body.getReader(), decoder=new TextDecoder();
+    let buffer='', fullText='';
+    while(true) {
+      const {done,value}=await reader.read(); if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      const lines=buffer.split('\n'); buffer=lines.pop();
+      for(const line of lines) {
+        if(!line.startsWith('data: '))continue;
+        const data=line.slice(6).trim(); if(data==='[DONE]')break;
+        try {
+          const evt=JSON.parse(data);
+          if(evt.type==='content_block_delta'&&evt.delta?.type==='text_delta') {
+            fullText+=evt.delta.text;
+            briefEl.innerHTML=fullText.split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean)
+              .map(p=>`<p style="margin-bottom:1.2em;">${p.replace(/\n/g,'<br>')}</p>`)
+              .join('<hr style="border:none;border-top:1px solid #ddd;margin:1.2em 0;">');
+          }
+        } catch{}
+      }
+    }
+
+    // Parse ratings → badges
+    const ratingRx=/\b(NVDA|TSM|ASML|AVGO|QCOM|CSCO|DELL|CRWD|VEEV|AAPL|AMZN|BABA|WMT|DASH|NKE|NYT|GE|BA|CAT|DAL|FDX|WAB|XOM|CVX|COP|SO|BEP|BEPC|BAC|JPM|SPGI|COWZ|VRTX|JNJ|PFE|BMY|VTRS|PKX)\b[^.]{0,80}?\b(Add|Trim|Hold)\b/gi;
+    let m;
+    while((m=ratingRx.exec(fullText))!==null) {
+      const ticker=m[1].toUpperCase();
+      const rating=m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase();
+      const el=document.getElementById(`rating-${ticker}`);
+      if(el){const cls=rating==='Add'?'badge-add':rating==='Trim'?'badge-trim':'badge-hold';el.innerHTML=`<span class="badge ${cls}">${rating}</span>`;}
+    }
+  } catch(err) {
+    const el=document.getElementById('brief-stream');
+    if(el) el.innerHTML=`<div class="error-box"><strong>AI Brief unavailable</strong> ${err.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Close-of-Market Brief</title>
+<style>
+  :root {
     --ink: #1a2e1a;
     --cream: #f5f0e8;
     --warm-white: #faf8f4;
