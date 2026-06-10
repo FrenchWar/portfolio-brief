@@ -6,750 +6,960 @@
 <title>Portfolio Close-of-Market Brief</title>
 <style>
   :root {
-    --ink: #1a2e1a; --cream: #f5f0e8; --warm-white: #faf8f4;
-    --gold: #9a7d4a; --mid: #6b6560; --rule: #d4cdc3;
-    --up: #2a6e2a; --dn: #8b2020; --warn: #7a5a00; --warn-bg: #fff8e6;
-    --add-bg: #eaf4ea; --trim-bg: #fdf0f0; --hold-bg: #f5f3ee;
+    --ink:    #1a1a2e;
+    --panel:  #16213e;
+    --card:   #0f3460;
+    --gold:   #e94560;
+    --accent: #533483;
+    --dim:    #8892b0;
+    --text:   #ccd6f6;
+    --green:  #64ffda;
+    --red:    #ff6b6b;
+    --yellow: #ffd166;
+    --white:  #e6f1ff;
+    --border: rgba(100,255,218,0.15);
   }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--warm-white); color:var(--ink); font-family:'Georgia',serif; font-size:15px; line-height:1.6; }
-  header { background:var(--ink); color:var(--cream); padding:18px 28px; display:flex; justify-content:space-between; align-items:center; }
-  header h1 { font-size:1.1rem; font-weight:normal; letter-spacing:.04em; }
-  #run-date { font-size:.8rem; color:#a0b0a0; font-family:monospace; }
-
-  /* SETUP */
-  .setup-panel { max-width:520px; margin:40px auto; padding:32px; background:white; border:1px solid var(--rule); border-radius:4px; }
-  .setup-panel h2 { font-size:1rem; font-weight:normal; margin-bottom:20px; }
-  .setup-panel h3 { font-size:.8rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin:24px 0 12px; border-bottom:1px solid var(--rule); padding-bottom:6px; }
-  label { display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin-bottom:5px; margin-top:14px; }
-  input[type="password"], input[type="text"], input[type="number"] {
-    width:100%; padding:8px 10px; border:1px solid var(--rule); border-radius:3px;
-    font-size:.88rem; font-family:monospace; background:var(--warm-white); color:var(--ink);
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
   }
-  input[type="number"] { width:80px; text-align:right; }
-  input:focus { outline:2px solid var(--gold); border-color:var(--gold); }
-  .run-btn { margin-top:22px; width:100%; padding:12px; background:var(--ink); color:var(--cream); border:none; border-radius:3px; font-size:.9rem; letter-spacing:.08em; cursor:pointer; transition:opacity .2s; }
-  .run-btn:hover { opacity:.85; }
-  .secondary-btn { margin-top:10px; width:100%; padding:9px; background:transparent; color:var(--ink); border:1px solid var(--rule); border-radius:3px; font-size:.82rem; cursor:pointer; }
-  .secondary-btn:hover { background:var(--cream); }
 
-  /* PORTFOLIO EDITOR */
-  .portfolio-editor { display:none; }
-  .pe-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(200px,1fr)); gap:8px; margin-top:8px; }
-  .pe-row { display:flex; align-items:center; gap:8px; padding:5px 8px; background:var(--warm-white); border:1px solid var(--rule); border-radius:3px; }
-  .pe-ticker { font-size:.82rem; font-weight:bold; width:42px; flex-shrink:0; }
-  .pe-theme { font-size:.68rem; color:var(--mid); flex:1; }
-  .pe-shares { width:72px; flex-shrink:0; }
+  /* ── SETUP PANEL ─────────────────────────────────────────── */
+  #setup-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,10,20,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+  #setup-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem 3rem;
+    width: 440px;
+    max-width: 95vw;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+  #setup-box h1 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 0.3rem;
+    letter-spacing: 0.02em;
+  }
+  #setup-box p {
+    color: var(--dim);
+    font-size: 0.85rem;
+    margin-bottom: 1.8rem;
+  }
+  .field-group { margin-bottom: 1.2rem; }
+  .field-group label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 0.4rem;
+  }
+  .field-group input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--white);
+    padding: 0.65rem 0.9rem;
+    font-size: 0.9rem;
+    font-family: monospace;
+    transition: border-color 0.2s;
+  }
+  .field-group input:focus {
+    outline: none;
+    border-color: var(--green);
+  }
+  #generate-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--accent), var(--gold));
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 0.8rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    letter-spacing: 0.03em;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  #generate-btn:hover { opacity: 0.9; }
+  #generate-btn:active { transform: scale(0.98); }
+  #setup-error {
+    color: var(--red);
+    font-size: 0.82rem;
+    margin-top: 0.8rem;
+    display: none;
+  }
 
-  /* PORTFOLIO SUMMARY BANNER */
-  .port-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:4px; overflow:hidden; margin-bottom:24px; }
-  .port-summary-cell { background:white; padding:14px 16px; }
-  .port-summary-cell .label { font-size:.68rem; text-transform:uppercase; letter-spacing:.1em; color:var(--mid); margin-bottom:4px; }
-  .port-summary-cell .value { font-size:1.15rem; font-weight:bold; }
-  .port-summary-cell .sub { font-size:.75rem; color:var(--mid); margin-top:2px; }
+  /* ── PROGRESS ────────────────────────────────────────────── */
+  #progress-area {
+    display: none;
+    padding: 3rem 2rem;
+    text-align: center;
+  }
+  .progress-bar-wrap {
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px;
+    height: 6px;
+    width: 320px;
+    margin: 1.2rem auto 0.8rem;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 99px;
+    transition: width 0.4s ease;
+    width: 0%;
+  }
+  #progress-label { color: var(--dim); font-size: 0.85rem; }
 
-  /* PROGRESS */
-  #progress-area { display:none; max-width:480px; margin:32px auto; padding:0 32px; }
-  .progress-bar-wrap { background:#e8e4dc; border-radius:20px; height:6px; margin-bottom:10px; }
-  .progress-bar { height:6px; background:var(--gold); border-radius:20px; transition:width .3s; }
-  #progress-label { font-size:.82rem; color:var(--mid); }
+  /* ── MAIN LAYOUT ─────────────────────────────────────────── */
+  #report-area { display: none; max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.5rem 4rem; }
 
-  /* REPORT */
-  #report-area { display:none; max-width:980px; margin:0 auto; padding:28px; }
-  .report-header { border-bottom:2px solid var(--ink); padding-bottom:14px; margin-bottom:24px; }
-  .report-header h2 { font-size:1.3rem; font-weight:normal; }
-  .report-header p { font-size:.83rem; color:var(--mid); margin-top:4px; }
-  .section { margin-bottom:28px; }
-  .section h3 { font-size:.73rem; text-transform:uppercase; letter-spacing:.12em; color:var(--mid); border-bottom:1px solid #ddd; padding-bottom:6px; margin-bottom:12px; }
-  .section ul { list-style:none; }
-  .section ul li { padding:6px 0; border-bottom:1px solid #f0ede8; font-size:.91rem; line-height:1.5; }
-  .section ul li:last-child { border-bottom:none; }
-  .movers-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  .mover-col h4 { font-size:.73rem; text-transform:uppercase; letter-spacing:.08em; margin-bottom:8px; }
-  .gainers h4 { color:var(--up); } .decliners h4 { color:var(--dn); }
+  .report-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    flex-wrap: wrap; gap: 0.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .report-header h2 {
+    font-size: 1.4rem; font-weight: 700;
+    color: var(--white); letter-spacing: 0.02em;
+  }
+  .report-date { color: var(--dim); font-size: 0.82rem; }
 
-  /* HOLDINGS TABLE */
-  .tbl-wrap { overflow-x:auto; }
-  .holdings-table { width:100%; border-collapse:collapse; font-size:.79rem; white-space:nowrap; }
-  .holdings-table th { text-align:left; padding:6px 7px; background:var(--ink); color:var(--cream); font-weight:normal; font-size:.65rem; text-transform:uppercase; letter-spacing:.06em; }
-  .holdings-table td { padding:5px 7px; border-bottom:1px solid #eee; vertical-align:middle; }
-  .holdings-table tr:hover td { background:#f9f8f4; }
-  .up { color:var(--up); } .dn { color:var(--dn); } .na { color:#aaa; font-style:italic; }
-  .theme-tag { font-size:.63rem; background:#e8e4dc; padding:1px 5px; border-radius:10px; color:#666; white-space:nowrap; }
-  .badge { font-size:.65rem; font-weight:bold; padding:2px 6px; border-radius:10px; white-space:nowrap; }
-  .badge-add  { background:var(--add-bg);  color:var(--up); border:1px solid #b8ddb8; }
-  .badge-trim { background:var(--trim-bg); color:var(--dn); border:1px solid #ddb8b8; }
-  .badge-hold { background:var(--hold-bg); color:var(--mid); border:1px solid #ccc; }
-  .vol-high { font-size:.68rem; color:var(--warn); font-weight:bold; }
-  .beat { color:var(--up); font-size:.75rem; } .miss { color:var(--dn); font-size:.75rem; }
+  .re-run {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--green);
+    border-radius: 6px;
+    padding: 0.4rem 1rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .re-run:hover { background: rgba(100,255,218,0.07); }
 
-  /* NEWS */
-  .news-item { padding:9px 0; border-bottom:1px solid #f0ede8; font-size:.88rem; line-height:1.5; }
-  .news-item:last-child { border-bottom:none; }
-  .news-item a { color:var(--ink); text-decoration:underline; }
-  .news-item a:hover { color:var(--gold); }
-  .news-meta { font-size:.75rem; color:var(--mid); margin-top:2px; font-family:monospace; }
-  .news-ticker-tag { font-size:.66rem; background:var(--ink); color:var(--cream); padding:1px 6px; border-radius:10px; margin-right:5px; vertical-align:middle; }
+  /* ── SCORECARD ───────────────────────────────────────────── */
+  .scorecard {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.9rem;
+    margin-bottom: 1.5rem;
+  }
+  .score-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+  }
+  .score-card .sc-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 0.4rem;
+  }
+  .score-card .sc-value {
+    font-size: 1.55rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--white);
+  }
+  .score-card .sc-sub { font-size: 0.78rem; color: var(--dim); margin-top: 0.25rem; }
 
-  .error-box { background:#fff3f3; border:1px solid #f5c6c6; border-radius:3px; padding:14px 18px; color:var(--dn); font-size:.88rem; margin-top:16px; }
-  .warn-box { background:var(--warn-bg); border:1px solid #e0c96a; border-radius:3px; padding:10px 14px; color:var(--warn); font-size:.83rem; margin-bottom:16px; }
-  .warn-box strong { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; }
-  .re-run { margin-top:24px; font-size:.85rem; color:var(--ink); cursor:pointer; text-decoration:underline; background:none; border:none; }
-  .data-gaps { font-size:.82rem; color:#888; font-style:italic; }
+  /* ── ALERT FLAGS ─────────────────────────────────────────── */
+  #alert-section { margin-bottom: 1.5rem; }
+  .alert-bar {
+    display: flex; align-items: center; gap: 0.7rem;
+    background: rgba(233,69,96,0.1);
+    border: 1px solid rgba(233,69,96,0.3);
+    border-radius: 8px;
+    padding: 0.7rem 1rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+  }
+  .alert-bar .ab-ticker {
+    font-weight: 700; font-family: monospace;
+    color: var(--yellow);
+    min-width: 55px;
+  }
+  .alert-bar .ab-reason { color: var(--text); }
+  .alert-bar .ab-pct { margin-left: auto; font-weight: 700; font-family: monospace; }
+
+  /* ── SECTIONS ────────────────────────────────────────────── */
+  .section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1.2rem;
+  }
+  .section h3 {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--green);
+    margin-bottom: 1rem;
+  }
+
+  /* ── HOLDINGS TABLE ──────────────────────────────────────── */
+  .holdings-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .holdings-table th {
+    text-align: left; padding: 0 0.6rem 0.6rem;
+    font-size: 0.68rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .holdings-table th.r, .holdings-table td.r { text-align: right; }
+  .holdings-table td {
+    padding: 0.45rem 0.6rem;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+  .holdings-table tr:last-child td { border-bottom: none; }
+  .holdings-table tr:hover td { background: rgba(255,255,255,0.03); }
+  .ticker-cell { font-weight: 700; font-family: monospace; color: var(--white); }
+  .theme-badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 99px;
+    background: rgba(83,52,131,0.5);
+    border: 1px solid rgba(83,52,131,0.8);
+    color: #c9b8ff;
+    white-space: nowrap;
+  }
+  .up { color: var(--green); }
+  .dn { color: var(--red); }
+  .na { color: var(--dim); }
+  .range-bar-wrap {
+    width: 80px; height: 6px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 99px; overflow: hidden;
+    display: inline-block; vertical-align: middle;
+  }
+  .range-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--green));
+    border-radius: 99px;
+  }
+  .flag-icon { font-size: 0.85rem; }
+
+  /* ── NEWS ────────────────────────────────────────────────── */
+  .news-item {
+    display: flex; gap: 0.8rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .news-item:last-child { border-bottom: none; }
+  .news-ticker {
+    font-weight: 700; font-family: monospace;
+    color: var(--yellow);
+    min-width: 55px; font-size: 0.8rem;
+    padding-top: 0.1rem;
+  }
+  .news-headline { font-size: 0.85rem; color: var(--text); }
+  .news-source { font-size: 0.72rem; color: var(--dim); margin-top: 0.1rem; }
+
+  /* ── AI BRIEF ────────────────────────────────────────────── */
+  #brief-stream {
+    font-size: 0.92rem;
+    line-height: 1.85;
+    color: var(--text);
+  }
+  #brief-stream p { margin-bottom: 1.1em; }
+  #brief-stream hr {
+    border: none; border-top: 1px solid var(--border);
+    margin: 1.1em 0;
+  }
+  .streaming-cursor {
+    display: inline-block;
+    width: 2px; height: 1em;
+    background: var(--green);
+    animation: blink 1s steps(1) infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ── ARCHIVE ─────────────────────────────────────────────── */
+  .archive-entry {
+    border-bottom: 1px solid var(--border);
+    padding: 0.8rem 0;
+  }
+  .archive-entry:last-child { border-bottom: none; }
+  .archive-date {
+    font-size: 0.75rem; color: var(--dim);
+    font-family: monospace; margin-bottom: 0.3rem;
+  }
+  .archive-preview {
+    font-size: 0.83rem; color: var(--text);
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .archive-expand-btn {
+    background: transparent; border: none;
+    color: var(--green); font-size: 0.75rem;
+    cursor: pointer; padding: 0.2rem 0; margin-top: 0.2rem;
+    display: block;
+  }
+  .archive-full { display: none; font-size: 0.83rem; color: var(--text); margin-top: 0.4rem; }
+
+  /* ── WARN BOX ────────────────────────────────────────────── */
+  .warn-box {
+    background: rgba(255,214,102,0.07);
+    border: 1px solid rgba(255,214,102,0.3);
+    border-radius: 8px;
+    padding: 0.8rem 1rem;
+    font-size: 0.82rem;
+    margin-bottom: 1rem;
+    color: var(--yellow);
+  }
+  .warn-box code {
+    font-family: monospace; font-size: 0.8rem;
+    color: var(--text);
+  }
+
+  /* ── SECTOR BARS ─────────────────────────────────────────── */
+  .sector-row {
+    display: flex; align-items: center; gap: 0.8rem;
+    margin-bottom: 0.55rem; font-size: 0.82rem;
+  }
+  .sector-label { min-width: 130px; color: var(--dim); }
+  .sector-bar-wrap {
+    flex: 1; height: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 99px; overflow: hidden;
+  }
+  .sector-bar-fill { height: 100%; border-radius: 99px; }
+  .sector-pct { min-width: 45px; text-align: right; font-family: monospace; }
+
+  /* ── RESPONSIVE ──────────────────────────────────────────── */
+  @media(max-width:640px) {
+    .scorecard { grid-template-columns: repeat(2,1fr); }
+    .holdings-table .hide-mobile { display: none; }
+    #report-area { padding: 1rem 0.75rem 3rem; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>Portfolio Close-of-Market Brief</h1>
-  <span id="run-date"></span>
-</header>
 
-<div id="setup" class="setup-panel">
-  <h2>Enter your API keys to generate today's brief</h2>
-  <label>Anthropic API Key</label>
-  <input type="password" id="anthropic-key" placeholder="sk-ant-..." autocomplete="off">
-  <label>Finnhub API Key</label>
-  <input type="text" id="finnhub-key" placeholder="your finnhub key" autocomplete="off">
-  <div style="margin-top:14px;display:flex;align-items:center;gap:8px;">
-    <input type="checkbox" id="remember-keys" style="width:auto;cursor:pointer;">
-    <label for="remember-keys" style="margin:0;text-transform:none;font-size:.82rem;letter-spacing:0;color:var(--mid);cursor:pointer;">Remember my keys on this device</label>
+<!-- ── SETUP OVERLAY ─────────────────────────────────────────── -->
+<div id="setup-overlay">
+  <div id="setup-box">
+    <h1>Portfolio Close-of-Market Brief</h1>
+    <p>Enter your API keys to generate today's brief. Keys are used only in your browser and never stored on any server.</p>
+    <div class="field-group">
+      <label>Anthropic API Key</label>
+      <input type="password" id="anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+    </div>
+    <div class="field-group">
+      <label>Finnhub API Key</label>
+      <input type="password" id="finnhub-key" placeholder="your-finnhub-key" autocomplete="off">
+    </div>
+    <div id="setup-error"></div>
+    <button id="generate-btn" onclick="startBrief()">Generate Brief</button>
   </div>
-  <div id="keys-saved-note" style="display:none;margin-top:8px;font-size:.75rem;color:var(--mid);text-align:center;">
-    Keys remembered — <span onclick="clearSavedKeys()" style="cursor:pointer;text-decoration:underline;">clear</span>
-  </div>
-
-  <div class="setup-panel" style="margin:0;padding:0;border:none;background:none;">
-    <h3>Portfolio Positions</h3>
-    <p style="font-size:.8rem;color:var(--mid);margin-bottom:12px;">Enter shares held. Saved locally on this device.</p>
-    <div class="pe-grid" id="pe-grid"></div>
-    <button class="secondary-btn" onclick="saveShares()">Save Positions</button>
-    <div id="shares-saved-note" style="display:none;font-size:.75rem;color:var(--up);text-align:center;margin-top:6px;">✓ Positions saved</div>
-  </div>
-
-  <button class="run-btn" onclick="runAgent()">Generate Brief</button>
 </div>
 
+<!-- ── PROGRESS ──────────────────────────────────────────────── -->
 <div id="progress-area">
-  <div class="progress-bar-wrap"><div class="progress-bar" id="progress-bar" style="width:0%"></div></div>
-  <div id="progress-label">Starting…</div>
+  <div style="color:var(--white);font-size:1rem;font-weight:600;">Building your brief…</div>
+  <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
+  <div id="progress-label">Initialising…</div>
 </div>
+
+<!-- ── REPORT ─────────────────────────────────────────────────── -->
 <div id="report-area"></div>
 
 <script>
-// ── Holdings master list ────────────────────────────────────────────────────
+// ── HOLDINGS ──────────────────────────────────────────────────
 const HOLDINGS = [
-  {ticker:'NVDA',theme:'AI/Semi'},{ticker:'TSM',theme:'AI/Semi'},{ticker:'ASML',theme:'AI/Semi'},
-  {ticker:'AVGO',theme:'AI/Semi'},{ticker:'QCOM',theme:'AI/Semi'},{ticker:'CSCO',theme:'AI/Semi'},
-  {ticker:'DELL',theme:'AI/Semi'},{ticker:'CRWD',theme:'AI/Semi'},{ticker:'VEEV',theme:'AI/Semi'},
-  {ticker:'AAPL',theme:'Platform'},{ticker:'AMZN',theme:'Platform'},{ticker:'BABA',theme:'Platform'},
-  {ticker:'WMT',theme:'Platform'},{ticker:'DASH',theme:'Platform'},{ticker:'NKE',theme:'Platform'},
-  {ticker:'NYT',theme:'Platform'},{ticker:'GE',theme:'Industrial'},{ticker:'BA',theme:'Industrial'},
-  {ticker:'CAT',theme:'Industrial'},{ticker:'DAL',theme:'Industrial'},{ticker:'FDX',theme:'Industrial'},
-  {ticker:'WAB',theme:'Industrial'},{ticker:'XOM',theme:'Energy'},{ticker:'CVX',theme:'Energy'},
-  {ticker:'COP',theme:'Energy'},{ticker:'SO',theme:'Energy'},{ticker:'BEP',theme:'Energy'},
-  {ticker:'BEPC',theme:'Energy'},{ticker:'BAC',theme:'Financials'},{ticker:'JPM',theme:'Financials'},
-  {ticker:'SPGI',theme:'Financials'},{ticker:'COWZ',theme:'Financials'},{ticker:'VRTX',theme:'Health'},
-  {ticker:'JNJ',theme:'Health'},{ticker:'PFE',theme:'Health'},{ticker:'BMY',theme:'Health'},
-  {ticker:'VTRS',theme:'Health'},{ticker:'PKX',theme:'Materials'},
+  {ticker:'AAPL',  theme:'Big Tech'},
+  {ticker:'AMZN',  theme:'Big Tech'},
+  {ticker:'ASML',  theme:'Semis'},
+  {ticker:'BA',    theme:'Industrial'},
+  {ticker:'BABA',  theme:'China Tech'},
+  {ticker:'BAC',   theme:'Financials'},
+  {ticker:'BEP',   theme:'Clean Energy'},
+  {ticker:'BEPC',  theme:'Clean Energy'},
+  {ticker:'BMY',   theme:'Healthcare'},
+  {ticker:'CAT',   theme:'Industrial'},
+  {ticker:'COP',   theme:'Energy'},
+  {ticker:'COWZ',  theme:'ETF'},
+  {ticker:'CRWD',  theme:'Cybersecurity'},
+  {ticker:'CSCO',  theme:'Big Tech'},
+  {ticker:'CVX',   theme:'Energy'},
+  {ticker:'DAL',   theme:'Transport'},
+  {ticker:'DASH',  theme:'Consumer Tech'},
+  {ticker:'DELL',  theme:'Big Tech'},
+  {ticker:'FDX',   theme:'Transport'},
+  {ticker:'GE',    theme:'Industrial'},
+  {ticker:'GEHC',  theme:'Healthcare'},
+  {ticker:'GEV',   theme:'Industrial'},
+  {ticker:'GM',    theme:'Autos'},
+  {ticker:'HD',    theme:'Consumer'},
+  {ticker:'IBIT',  theme:'Crypto'},
+  {ticker:'INTC',  theme:'Semis'},
+  {ticker:'JNJ',   theme:'Healthcare'},
+  {ticker:'JPM',   theme:'Financials'},
+  {ticker:'MOG.A', theme:'Industrial'},
+  {ticker:'MSFT',  theme:'Big Tech'},
+  {ticker:'NKE',   theme:'Consumer'},
+  {ticker:'NVDA',  theme:'Semis'},
+  {ticker:'NYT',   theme:'Media'},
+  {ticker:'PFE',   theme:'Healthcare'},
+  {ticker:'PKX',   theme:'Materials'},
+  {ticker:'QCOM',  theme:'Semis'},
+  {ticker:'SO',    theme:'Utilities'},
+  {ticker:'SPGI',  theme:'Financials'},
+  {ticker:'TSM',   theme:'Semis'},
+  {ticker:'VRTX',  theme:'Healthcare'},
+  {ticker:'VTRS',  theme:'Healthcare'},
+  {ticker:'WAB',   theme:'Industrial'},
+  {ticker:'WMT',   theme:'Consumer'},
+  {ticker:'XOM',   theme:'Energy'},
+  {ticker:'SPY',   theme:'Benchmark'},
+  {ticker:'QQQ',   theme:'Benchmark'},
 ];
 
-// ── Persistence ─────────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  buildPortfolioEditor();
-  try {
-    const ak = localStorage.getItem('pb_anthropic_key');
-    const fk = localStorage.getItem('pb_finnhub_key');
-    if (ak) {
-      document.getElementById('anthropic-key').value = ak;
-      document.getElementById('finnhub-key').value = fk || '';
-      document.getElementById('remember-keys').checked = true;
-      document.getElementById('keys-saved-note').style.display = 'block';
-    }
-  } catch(e) {}
-  loadShares();
-});
+const ALERT_THRESHOLD = 3.0;   // % daily move triggers alert
+const NEAR_RANGE_PCT  = 5.0;   // % within 52w high/low triggers alert
+const ARCHIVE_KEY     = 'hf_portfolio_archive';
+const ARCHIVE_MAX     = 30;
 
-function clearSavedKeys() {
-  try {
-    localStorage.removeItem('pb_anthropic_key');
-    localStorage.removeItem('pb_finnhub_key');
-    document.getElementById('anthropic-key').value = '';
-    document.getElementById('finnhub-key').value = '';
-    document.getElementById('remember-keys').checked = false;
-    document.getElementById('keys-saved-note').style.display = 'none';
-  } catch(e) {}
-}
+let anthropicKey = '', finnhubKey = '';
 
-function buildPortfolioEditor() {
-  const grid = document.getElementById('pe-grid');
-  grid.innerHTML = HOLDINGS.map(h => `
-    <div class="pe-row">
-      <span class="pe-ticker">${h.ticker}</span>
-      <span class="pe-theme">${h.theme}</span>
-      <input type="number" class="pe-shares" id="sh-${h.ticker}" min="0" step="1" value="0" placeholder="0">
-    </div>`).join('');
-}
-
-function saveShares() {
-  try {
-    const shares = {};
-    HOLDINGS.forEach(h => {
-      const v = parseInt(document.getElementById('sh-'+h.ticker)?.value || '0');
-      if (v > 0) shares[h.ticker] = v;
-    });
-    localStorage.setItem('pb_shares', JSON.stringify(shares));
-    const note = document.getElementById('shares-saved-note');
-    note.style.display = 'block';
-    setTimeout(() => note.style.display = 'none', 2500);
-  } catch(e) {}
-}
-
-function loadShares() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('pb_shares') || '{}');
-    HOLDINGS.forEach(h => {
-      const el = document.getElementById('sh-'+h.ticker);
-      if (el && saved[h.ticker]) el.value = saved[h.ticker];
-    });
-  } catch(e) {}
-}
-
-function getShares() {
-  const shares = {};
-  HOLDINGS.forEach(h => {
-    const v = parseInt(document.getElementById('sh-'+h.ticker)?.value || '0');
-    shares[h.ticker] = v || 0;
-  });
-  return shares;
-}
-
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// ── UTILITIES ─────────────────────────────────────────────────
 function setProgress(pct, label) {
-  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-fill').style.width = pct + '%';
   document.getElementById('progress-label').textContent = label;
 }
 
-async function fetchWithTimeout(url, opts={}, ms=8000, retries=2) {
-  for (let i=0; i<=retries; i++) {
-    const ctrl = new AbortController();
-    const t = setTimeout(()=>ctrl.abort(), ms);
-    try {
-      const res = await fetch(url, {...opts, signal:ctrl.signal});
-      clearTimeout(t); return res;
-    } catch(err) {
-      clearTimeout(t);
-      if (i < retries && (err.name==='TypeError'||err.name==='AbortError')) {
-        await new Promise(r=>setTimeout(r, 600*(i+1))); continue;
-      }
-      throw err;
-    }
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function finnhub(path) {
+  const url = `https://finnhub.io/api/v1${path}&token=${finnhubKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Finnhub ${res.status}: ${path}`);
+  return res.json();
+}
+
+// ── ARCHIVE ────────────────────────────────────────────────────
+function archiveLoad() {
+  try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); }
+  catch { return []; }
+}
+function archiveSave(entry) {
+  const list = archiveLoad();
+  list.unshift(entry);
+  if (list.length > ARCHIVE_MAX) list.length = ARCHIVE_MAX;
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list));
+}
+
+// ── MAIN ENTRY ─────────────────────────────────────────────────
+async function startBrief() {
+  anthropicKey = document.getElementById('anthropic-key').value.trim();
+  finnhubKey   = document.getElementById('finnhub-key').value.trim();
+
+  const errEl = document.getElementById('setup-error');
+  if (!anthropicKey || !anthropicKey.startsWith('sk-ant')) {
+    errEl.textContent = 'Please enter a valid Anthropic API key (starts with sk-ant-).';
+    errEl.style.display = 'block'; return;
   }
-}
+  if (!finnhubKey) {
+    errEl.textContent = 'Please enter your Finnhub API key.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
 
-// ── Finnhub fetchers ─────────────────────────────────────────────────────────
-async function fetchQuote(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${key}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-    if (!d.c || d.c===0) return null;
-    return {price:d.c, change:d.d, pct:d.dp, high:d.h, low:d.l, prevClose:d.pc, volume:d.v};
-  } catch(e) { return {error:e.message||'NetworkError'}; }
-}
+  // Hide setup, show progress
+  document.getElementById('setup-overlay').style.display = 'none';
+  const progArea = document.getElementById('progress-area');
+  progArea.style.display = 'block';
 
-async function fetchBasicFinancials(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json(); const m = d.metric||{};
-    return {
-      pe:           m['peNormalizedAnnual']||m['peTTM']||null,
-      forwardPE:    m['forwardPE']||null,
-      revenueGrowth:m['revenueGrowthTTMYoy']||null,
-      epsGrowth:    m['epsGrowthTTMYoy']||null,
-      netMargin:    m['netProfitMarginTTM']||null,
-      roe:          m['roeTTM']||null,
-      debtToEquity: m['totalDebt/totalEquityAnnual']||null,
-      currentRatio: m['currentRatioAnnual']||null,
-      week52High:   m['52WeekHigh']||null,
-      week52Low:    m['52WeekLow']||null,
-      avgVol10d:    m['10DayAverageTradingVolume']||null,
-      beta:         m['beta']||null,
-    };
-  } catch(e) { return null; }
-}
+  setProgress(2, 'Fetching quotes…');
 
-async function fetchEarningsSurprises(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/earnings?symbol=${ticker}&limit=4&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    if (!d||!d.length) return null;
-    return d.slice(0,4).map(e => ({
-      period:   e.period,
-      actual:   e.actual,
-      estimate: e.estimate,
-      surprise: e.surprise,
-      surprisePct: e.surprisePercent,
-    }));
-  } catch(e) { return null; }
-}
+  // ── 1. QUOTES ──────────────────────────────────────────────
+  const quoteData = [];
+  const networkFailures = [];
+  const total = HOLDINGS.length;
 
-async function fetchShortInterest(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/short-interest?symbol=${ticker}&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    const latest = d?.data?.[0];
-    if (!latest) return null;
-    return {
-      shortPct: latest.shortInterestRatio||null,
-      sharesShort: latest.shortInterest||null,
-    };
-  } catch(e) { return null; }
-}
-
-async function fetchInsider(ticker, key) {
-  try {
-    const to=new Date(), from=new Date(); from.setDate(from.getDate()-30);
-    const fmt=d=>d.toISOString().split('T')[0];
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/insider-transactions?symbol=${ticker}&from=${fmt(from)}&to=${fmt(to)}&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    const txns=(d.data||[]).filter(t=>t.transactionType==='P-Purchase'||t.transactionType==='S-Sale');
-    if (!txns.length) return null;
-    const buys=txns.filter(t=>t.transactionType==='P-Purchase');
-    const sells=txns.filter(t=>t.transactionType==='S-Sale');
-    return {buys:buys.length, sells:sells.length, net:buys.length-sells.length};
-  } catch(e) { return null; }
-}
-
-async function fetchEarningsCalendar(ticker, key) {
-  try {
-    const from=new Date(), to=new Date(); to.setDate(to.getDate()+90);
-    const fmt=d=>d.toISOString().split('T')[0];
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/calendar/earnings?from=${fmt(from)}&to=${fmt(to)}&symbol=${ticker}&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    return d.earningsCalendar?.[0]||null;
-  } catch(e) { return null; }
-}
-
-async function fetchNews(ticker, key) {
-  try {
-    const from=new Date(); from.setDate(from.getDate()-1);
-    const to=new Date();
-    const fmt=d=>d.toISOString().split('T')[0];
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=${fmt(from)}&to=${fmt(to)}&token=${key}`);
-    if (!res.ok) return [];
-    const items=await res.json();
-    return (items||[]).slice(0,2).map(n=>({ticker,headline:n.headline,url:n.url,source:n.source,datetime:n.datetime}));
-  } catch(e) { return []; }
-}
-
-async function fetchRecommendation(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/recommendation?symbol=${ticker}&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json(); return d?.[0]||null;
-  } catch(e) { return null; }
-}
-
-async function fetchPriceTarget(ticker, key) {
-  try {
-    const res = await fetchWithTimeout(`https://finnhub.io/api/v1/stock/price-target?symbol=${ticker}&token=${key}`);
-    if (!res.ok) return null;
-    const d = await res.json();
-    if (!d?.targetMean) return null;
-    return {low:d.targetLow, high:d.targetHigh, mean:d.targetMean};
-  } catch(e) { return null; }
-}
-
-// ── Main agent ───────────────────────────────────────────────────────────────
-async function runAgent() {
-  const anthropicKey = document.getElementById('anthropic-key').value.trim();
-  const finnhubKey   = document.getElementById('finnhub-key').value.trim();
-  if (!anthropicKey||!finnhubKey) { alert('Please enter both API keys.'); return; }
-
-  try {
-    if (document.getElementById('remember-keys').checked) {
-      localStorage.setItem('pb_anthropic_key', anthropicKey);
-      localStorage.setItem('pb_finnhub_key', finnhubKey);
-    } else {
-      localStorage.removeItem('pb_anthropic_key');
-      localStorage.removeItem('pb_finnhub_key');
+  for (let i = 0; i < total; i++) {
+    const h = HOLDINGS[i];
+    setProgress(2 + Math.round((i / total) * 38), `Quote ${i+1}/${total}: ${h.ticker}`);
+    try {
+      const q = await finnhub(`/quote?symbol=${h.ticker}`);
+      quoteData.push({
+        ...h,
+        price:  q.c  || null,
+        change: q.d  || null,
+        pct:    q.dp || null,
+        high:   q.h  || null,
+        low:    q.l  || null,
+        prevClose: q.pc || null,
+      });
+    } catch(e) {
+      networkFailures.push(h.ticker);
+      quoteData.push({ ...h, price: null, change: null, pct: null, high: null, low: null, prevClose: null });
     }
+    await sleep(1100);
+  }
+
+  // ── 2. 52-WEEK HIGH/LOW ────────────────────────────────────
+  setProgress(42, 'Fetching 52-week ranges…');
+  const rangeMap = {};
+  const now = Math.floor(Date.now()/1000);
+  const oneYearAgo = now - 365*24*3600;
+
+  // Batch: fetch for each holding (use basic financials endpoint - free tier)
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const t = HOLDINGS[i].ticker;
+    if (t === 'SPY' || t === 'QQQ') continue; // benchmarks skip
+    try {
+      const r = await finnhub(`/stock/metric?symbol=${t}&metric=all`);
+      const m = r.metric || {};
+      rangeMap[t] = {
+        high52: m['52WeekHigh'] || null,
+        low52:  m['52WeekLow']  || null,
+      };
+    } catch(e) { rangeMap[t] = { high52: null, low52: null }; }
+    await sleep(1100);
+    setProgress(42 + Math.round((i / HOLDINGS.length) * 18), `52w range ${i+1}/${HOLDINGS.length}: ${t}`);
+  }
+
+  // ── 3. EARNINGS ────────────────────────────────────────────
+  setProgress(62, 'Fetching earnings calendar…');
+  const earningsMap = {};
+  try {
+    const fromDate = new Date().toISOString().slice(0,10);
+    const toDate   = new Date(Date.now() + 90*24*3600*1000).toISOString().slice(0,10);
+    const ec = await finnhub(`/calendar/earnings?from=${fromDate}&to=${toDate}`);
+    (ec.earningsCalendar || []).forEach(e => {
+      const t = e.symbol;
+      if (HOLDINGS.find(h => h.ticker === t)) earningsMap[t] = e.date;
+    });
   } catch(e) {}
 
-  const shares = getShares();
-  document.getElementById('setup').style.display = 'none';
-  document.getElementById('progress-area').style.display = 'block';
-  document.getElementById('run-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  // ── 4. NEWS ────────────────────────────────────────────────
+  setProgress(66, 'Fetching news…');
+  const newsDigest = [];
+  const topTickers = [...quoteData]
+    .filter(q => q.pct != null)
+    .sort((a,b) => Math.abs(b.pct) - Math.abs(a.pct))
+    .slice(0, 12)
+    .map(q => q.ticker);
 
-  const quoteData=[], networkFailures=[], noData=[];
-  const fundamentals={}, surprises={}, shortMap={}, insiderMap={}, earningsMap={}, recMap={}, ptMap={};
-
-  // 1. Quotes
-  for (let i=0;i<HOLDINGS.length;i++) {
-    const {ticker,theme}=HOLDINGS[i];
-    setProgress(Math.round((i/HOLDINGS.length)*20), `Quotes: ${ticker} (${i+1}/${HOLDINGS.length})…`);
-    const q = await fetchQuote(ticker,finnhubKey);
-    if (!q)        { noData.push(ticker); quoteData.push({ticker,theme,error:'no data'}); }
-    else if(q.error){ networkFailures.push(`${ticker}: ${q.error}`); quoteData.push({ticker,theme,error:q.error}); }
-    else           { quoteData.push({ticker,theme,...q}); }
-    await new Promise(r=>setTimeout(r,1050));
-  }
-
-  // 2. Basic financials
-  for (let i=0;i<HOLDINGS.length;i++) {
-    const {ticker}=HOLDINGS[i];
-    setProgress(20+Math.round((i/HOLDINGS.length)*15), `Fundamentals: ${ticker}…`);
-    const f = await fetchBasicFinancials(ticker,finnhubKey);
-    if (f) fundamentals[ticker]=f;
-    await new Promise(r=>setTimeout(r,1050));
-  }
-
-  // 3. Earnings surprises
-  for (let i=0;i<HOLDINGS.length;i++) {
-    const {ticker}=HOLDINGS[i];
-    setProgress(35+Math.round((i/HOLDINGS.length)*12), `Earnings history: ${ticker}…`);
-    const s = await fetchEarningsSurprises(ticker,finnhubKey);
-    if (s) surprises[ticker]=s;
-    await new Promise(r=>setTimeout(r,1050));
-  }
-
-  // 4. Short interest
-  for (let i=0;i<HOLDINGS.length;i++) {
-    const {ticker}=HOLDINGS[i];
-    if (i%6===0) setProgress(47+Math.round((i/HOLDINGS.length)*8), `Short interest: ${ticker}…`);
-    const s = await fetchShortInterest(ticker,finnhubKey);
-    if (s) shortMap[ticker]=s;
-    await new Promise(r=>setTimeout(r,1050));
-  }
-
-  // 5. Insider
-  for (let i=0;i<HOLDINGS.length;i++) {
-    const {ticker}=HOLDINGS[i];
-    if (i%6===0) setProgress(55+Math.round((i/HOLDINGS.length)*6), `Insider: ${ticker}…`);
-    const ins = await fetchInsider(ticker,finnhubKey);
-    if (ins) insiderMap[ticker]=ins;
-    await new Promise(r=>setTimeout(r,1050));
-  }
-
-  // 6. Earnings calendar
-  setProgress(61, 'Earnings calendar…');
-  for (const {ticker} of HOLDINGS) {
-    const e = await fetchEarningsCalendar(ticker,finnhubKey);
-    if (e) earningsMap[ticker]=e.date;
-    await new Promise(r=>setTimeout(r,400));
-  }
-
-  // 7. News
-  setProgress(65, 'News headlines…');
-  const allNews=[];
-  for (const {ticker} of HOLDINGS) {
-    const items = await fetchNews(ticker,finnhubKey);
-    allNews.push(...items);
-    await new Promise(r=>setTimeout(r,300));
-  }
-  const seenH=new Set();
-  const newsDigest=allNews.sort((a,b)=>b.datetime-a.datetime)
-    .filter(n=>{ if(seenH.has(n.headline))return false; seenH.add(n.headline); return true; })
-    .slice(0,20);
-
-  // 8. Recommendations & price targets
-  setProgress(70, 'Analyst data…');
-  for (const {ticker} of HOLDINGS) {
+  for (const ticker of topTickers) {
     try {
-      const [rec,pt]=await Promise.allSettled([fetchRecommendation(ticker,finnhubKey),fetchPriceTarget(ticker,finnhubKey)]);
-      if (rec.status==='fulfilled'&&rec.value) recMap[ticker]=rec.value;
-      if (pt.status==='fulfilled'&&pt.value)   ptMap[ticker]=pt.value;
+      const today = new Date().toISOString().slice(0,10);
+      const yesterday = new Date(Date.now()-2*86400000).toISOString().slice(0,10);
+      const news = await finnhub(`/company-news?symbol=${ticker}&from=${yesterday}&to=${today}`);
+      if (news && news.length > 0) {
+        newsDigest.push({ ticker, headline: news[0].headline, source: news[0].source });
+      }
     } catch(e) {}
-    await new Promise(r=>setTimeout(r,1050));
+    await sleep(1100);
   }
 
-  // 9. Compute movers, volume flags, portfolio totals
-  setProgress(80,'Computing…');
-  const valid=quoteData.filter(q=>q.pct!=null);
-  const sorted=[...valid].sort((a,b)=>b.pct-a.pct);
-  const gainers=sorted.slice(0,5), decliners=sorted.slice(-5).reverse();
-
-  const volumeFlags={};
-  for (const q of valid) {
-    const f=fundamentals[q.ticker];
-    if (f?.avgVol10d&&q.volume) {
-      // avgVol10d is in millions; q.volume is in shares
-      const avgVol = f.avgVol10d * 1e6;
-      const ratio = q.volume / avgVol;
-      if (ratio>1.5) volumeFlags[q.ticker]=ratio.toFixed(1);
-    }
+  // ── 5. ANALYST RECOMMENDATIONS ────────────────────────────
+  setProgress(76, 'Fetching analyst data…');
+  const analystMap = {};
+  for (const ticker of topTickers.slice(0, 8)) {
+    try {
+      const rec = await finnhub(`/stock/recommendation?symbol=${ticker}`);
+      if (rec && rec.length > 0) {
+        const latest = rec[0];
+        analystMap[ticker] = {
+          buy:        latest.buy,
+          hold:       latest.hold,
+          sell:       latest.sell,
+          strongBuy:  latest.strongBuy,
+          strongSell: latest.strongSell,
+        };
+      }
+    } catch(e) {}
+    await sleep(1100);
   }
 
-  // Portfolio value calculations
-  let totalValue=0, totalDayChange=0, positionValues={};
-  for (const q of valid) {
-    const sh=shares[q.ticker]||0;
-    if (sh>0) {
-      const val=sh*q.price;
-      const dayChg=sh*(q.change||0);
-      positionValues[q.ticker]=val;
-      totalValue+=val;
-      totalDayChange+=dayChg;
+  // ── 6. COMPUTE DERIVED DATA ────────────────────────────────
+  setProgress(85, 'Computing analysis…');
+
+  const valid = quoteData.filter(q => q.pct != null && q.theme !== 'Benchmark');
+  const sorted = [...valid].sort((a,b) => b.pct - a.pct);
+  const gainers  = sorted.slice(0, 5);
+  const decliners = sorted.slice(-5).reverse();
+
+  // Sector aggregates
+  const sectorMap = {};
+  valid.forEach(q => {
+    if (!sectorMap[q.theme]) sectorMap[q.theme] = { sum: 0, count: 0 };
+    sectorMap[q.theme].sum   += q.pct;
+    sectorMap[q.theme].count += 1;
+  });
+  const sectors = Object.entries(sectorMap)
+    .map(([name, v]) => ({ name, avg: v.sum / v.count }))
+    .sort((a,b) => b.avg - a.avg);
+
+  // Portfolio score (avg pct move, excluding benchmarks)
+  const avgPct = valid.reduce((s,q) => s + q.pct, 0) / (valid.length || 1);
+  const gainCount = valid.filter(q => q.pct > 0).length;
+  const lossCount = valid.filter(q => q.pct < 0).length;
+
+  // Benchmarks
+  const spy = quoteData.find(q => q.ticker === 'SPY');
+  const qqq = quoteData.find(q => q.ticker === 'QQQ');
+
+  // Alert flags
+  const alerts = [];
+  valid.forEach(q => {
+    const r = rangeMap[q.ticker] || {};
+    if (Math.abs(q.pct) >= ALERT_THRESHOLD) {
+      alerts.push({ ticker: q.ticker, pct: q.pct,
+        reason: `${q.pct >= 0 ? '+' : ''}${q.pct.toFixed(1)}% daily move` });
+    } else if (r.high52 && q.price && (r.high52 - q.price) / r.high52 * 100 <= NEAR_RANGE_PCT) {
+      alerts.push({ ticker: q.ticker, pct: q.pct,
+        reason: `Within ${NEAR_RANGE_PCT}% of 52-week high ($${r.high52.toFixed(2)})` });
+    } else if (r.low52 && q.price && (q.price - r.low52) / r.low52 * 100 <= NEAR_RANGE_PCT) {
+      alerts.push({ ticker: q.ticker, pct: q.pct,
+        reason: `Within ${NEAR_RANGE_PCT}% of 52-week low ($${r.low52.toFixed(2)})` });
     }
-  }
-  const totalDayPct=totalValue>0?(totalDayChange/(totalValue-totalDayChange))*100:0;
-  const hasPortfolioData=totalValue>0;
+  });
 
-  // 10. Build prompt
-  setProgress(84,'Building prompt…');
-  const holdingsSummary=quoteData.filter(q=>q.price!=null).map(q=>{
-    const f=fundamentals[q.ticker]||{};
-    const pt=ptMap[q.ticker];
-    const ins=insiderMap[q.ticker];
-    const sh=shares[q.ticker]||0;
-    const posVal=positionValues[q.ticker];
-    const surp=surprises[q.ticker];
-    const si=shortMap[q.ticker];
+  // Build strings for Claude prompt
+  const holdingsSummary = valid
+    .map(q => `${q.ticker} (${q.theme}): $${q.price?.toFixed(2)}, ${q.pct>=0?'+':''}${q.pct?.toFixed(2)}%`)
+    .join('\n');
+  const earningsList = Object.entries(earningsMap)
+    .map(([t,d]) => `${t}: ${d}`).join(', ') || 'none found';
+  const analystSummary = Object.entries(analystMap)
+    .map(([t,v]) => `${t}: ${v.strongBuy+v.buy} buy / ${v.hold} hold / ${v.sell+v.strongSell} sell`)
+    .join('\n') || 'unavailable';
+  const newsSummary = newsDigest
+    .map(n => `${n.ticker}: ${n.headline}`).join('\n') || 'none';
+  const alertSummary = alerts.length
+    ? alerts.map(a => `${a.ticker}: ${a.reason}`).join('\n') : 'none';
 
-    const parts=[`${q.ticker} (${q.theme}): $${q.price.toFixed(2)} ${q.pct>=0?'+':''}${q.pct?.toFixed(2)}%`];
-    if (sh>0) parts.push(`${sh} shares ($${posVal?.toFixed(0)})`);
-    if (f.week52High) parts.push(`52wk $${f.week52Low?.toFixed(0)}-$${f.week52High?.toFixed(0)}`);
-    if (f.pe!=null) parts.push(`P/E ${f.pe.toFixed(1)}`);
-    if (f.forwardPE!=null) parts.push(`fwdP/E ${f.forwardPE.toFixed(1)}`);
-    if (f.revenueGrowth!=null) parts.push(`RevGr ${(f.revenueGrowth*100).toFixed(1)}%`);
-    if (f.epsGrowth!=null) parts.push(`EPSGr ${(f.epsGrowth*100).toFixed(1)}%`);
-    if (f.netMargin!=null) parts.push(`Margin ${(f.netMargin*100).toFixed(1)}%`);
-    if (f.roe!=null) parts.push(`ROE ${(f.roe*100).toFixed(1)}%`);
-    if (f.debtToEquity!=null) parts.push(`D/E ${f.debtToEquity.toFixed(2)}`);
-    if (f.beta!=null) parts.push(`Beta ${f.beta.toFixed(2)}`);
-    if (pt) parts.push(`PT $${pt.mean?.toFixed(0)} ($${pt.low?.toFixed(0)}-$${pt.high?.toFixed(0)})`);
-    if (si?.shortPct) parts.push(`Short ${si.shortPct.toFixed(1)}%`);
-    if (ins) parts.push(`Insider ${ins.buys}B/${ins.sells}S`);
-    if (volumeFlags[q.ticker]) parts.push(`⚠Vol ${volumeFlags[q.ticker]}x`);
-    if (surp?.length) {
-      const trend=surp.map(e=>e.surprisePct!=null?`${e.surprisePct>0?'+':''}${e.surprisePct.toFixed(1)}%`:'n/a').join(', ');
-      parts.push(`EPS surprises(last 4Q): ${trend}`);
-    }
-    return parts.join(' | ');
-  }).join('\n');
+  // ── 7. STREAM AI BRIEF ─────────────────────────────────────
+  setProgress(90, 'Generating AI narrative…');
 
-  const analystSummary=Object.entries(recMap).map(([t,r])=>
-    `${t}: SBuy=${r.strongBuy} Buy=${r.buy} Hold=${r.hold} Sell=${r.sell} SSell=${r.strongSell}`
-  ).join('\n')||'none';
+  // Show report area early so streaming renders live
+  const ra = document.getElementById('report-area');
+  progArea.style.display = 'none';
+  ra.style.display = 'block';
 
-  const earningsList=Object.entries(earningsMap).map(([t,d])=>`${t}: ${d}`).join(', ')||'none';
-  const newsSummary=newsDigest.slice(0,10).map(n=>`[${n.ticker}] ${n.headline}`).join('\n')||'none today';
-  const portContext=hasPortfolioData?`Total portfolio value: $${totalValue.toFixed(0)}, day P&L: ${totalDayChange>=0?'+':''}$${totalDayChange.toFixed(0)} (${totalDayPct>=0?'+':''}${totalDayPct.toFixed(2)}%)`:'(share counts not provided)';
+  // Helper formatters
+  const fmt  = (n, dec=2) => n==null ? '<span class="na">n/a</span>'
+    : `<span class="${n>=0?'up':'dn'}">${n>=0?'+':''}${n.toFixed(dec)}%</span>`;
+  const fmtP = n => n==null ? '<span class="na">n/a</span>' : `$${n.toFixed(2)}`;
+  const fmtChange = n => n==null ? '<span class="na">n/a</span>'
+    : `<span class="${n>=0?'up':'dn'}">${n>=0?'+':'-'}$${Math.abs(n).toFixed(2)}</span>`;
 
-  const prompt=`You are a senior portfolio analyst writing a daily close-of-market brief for a sophisticated investor. Write a detailed, editorial-quality narrative of 8–10 substantial paragraphs separated by ---. Do not truncate or stop early — write every paragraph completely.
-
-Cover in flowing prose: (1) Executive summary — portfolio value, day P&L, and overall tone in 3-4 sentences. (2) Most consequential movers with analysis referencing fundamentals, EPS surprise history, and debt metrics where relevant. (3) Unusual volume flags and their significance. (4) Short interest — flag any high short interest positions and what it signals. (5) Insider activity. (6) Analyst consensus, upgrades/downgrades, price targets vs current price. (7) Thematic sector observations. (8) Significant news — product launches, regulatory decisions, earnings surprises. (9) Upcoming earnings and strategic importance. (10) Hold/Add/Trim rating for EVERY position with brief justification, followed by a forward-looking note.
-
-Add/Trim/Hold criteria: Add = strong fundamentals + attractive valuation + positive momentum or catalyst. Trim = deteriorating fundamentals, high D/E, stretched valuation, or negative catalyst. Hold = everything else. High short interest (>10%) should be flagged as a risk factor. Negative EPS surprise trend (3+ consecutive misses) warrants Trim consideration.
-
-Portfolio context: ${portContext}
-
-Holdings (price | shares+value | 52wk | P/E | fwdP/E | RevGr | EPSGr | Margin | ROE | D/E | Beta | PT | Short% | Insider | Vol | EPS surprises):
-${holdingsSummary}
-
-Analyst consensus:
-${analystSummary}
-
-News: ${newsSummary}
-Upcoming earnings: ${earningsList}
-${networkFailures.length?`Data unavailable: ${networkFailures.map(f=>f.split(':')[0]).join(', ')}`:''}
-
-Write the complete brief now. Do not stop until all 10 sections including every Hold/Add/Trim rating are finished.`;
-
-  // 11. Render static sections + stream brief
-  setProgress(100,'Generating AI brief…');
-  const ra=document.getElementById('report-area');
-  ra.style.display='block';
-  document.getElementById('progress-area').style.display='none';
-
-  const fmt=(n,dec=2)=>n==null?'<span class="na">—</span>':`<span class="${n>=0?'up':'dn'}">${n>=0?'+':''}${n.toFixed(dec)}%</span>`;
-  const fmtP=n=>n==null?'<span class="na">—</span>':`$${n.toFixed(2)}`;
-  const fmtN=(n,dec=1)=>n==null?'<span class="na">—</span>':n.toFixed(dec);
-  const dollar=n=>n==null?'<span class="na">—</span>':`$${Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0})}`;
-
-  const networkWarn=networkFailures.length?`<div class="warn-box"><strong>⚠ Network issues</strong> Data unavailable for: ${networkFailures.map(f=>f.split(':')[0]).join(', ')}. Run again to retry.</div>`:'';
-
-  const portfolioBanner=hasPortfolioData?`
-    <div class="port-summary">
-      <div class="port-summary-cell">
-        <div class="label">Portfolio Value</div>
-        <div class="value">${dollar(totalValue)}</div>
-        <div class="sub">as of close</div>
+  // Render scorecard + alerts + tables immediately
+  const scoreHTML = `
+    <div class="scorecard">
+      <div class="score-card">
+        <div class="sc-label">Portfolio Avg Move</div>
+        <div class="sc-value ${avgPct>=0?'up':'dn'}">${avgPct>=0?'+':''}${avgPct.toFixed(2)}%</div>
+        <div class="sc-sub">${gainCount} up · ${lossCount} down</div>
       </div>
-      <div class="port-summary-cell">
-        <div class="label">Day P&amp;L</div>
-        <div class="value ${totalDayChange>=0?'up':'dn'}">${totalDayChange>=0?'+':'−'}${dollar(Math.abs(totalDayChange))}</div>
-        <div class="sub">${fmt(totalDayPct)}</div>
+      <div class="score-card">
+        <div class="sc-label">SPY</div>
+        <div class="sc-value ${(spy?.pct||0)>=0?'up':'dn'}">${fmt(spy?.pct||null)}</div>
+        <div class="sc-sub">Benchmark</div>
       </div>
-      <div class="port-summary-cell">
-        <div class="label">Positions</div>
-        <div class="value">${Object.keys(positionValues).length}</div>
-        <div class="sub">of ${HOLDINGS.length} holdings</div>
+      <div class="score-card">
+        <div class="sc-label">QQQ</div>
+        <div class="sc-value ${(qqq?.pct||0)>=0?'up':'dn'}">${fmt(qqq?.pct||null)}</div>
+        <div class="sc-sub">Benchmark</div>
       </div>
-      <div class="port-summary-cell">
-        <div class="label">Largest Position</div>
-        <div class="value" style="font-size:.95rem;">${Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—'}</div>
-        <div class="sub">${Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0]?dollar(Object.entries(positionValues).sort((a,b)=>b[1]-a[1])[0][1]):''}</div>
+      <div class="score-card">
+        <div class="sc-label">Top Mover</div>
+        <div class="sc-value" style="font-size:1.1rem;">${gainers[0]?.ticker||'—'}</div>
+        <div class="sc-sub">${gainers[0] ? fmt(gainers[0].pct) : '—'}</div>
       </div>
-    </div>`:'' ;
+      <div class="score-card">
+        <div class="sc-label">Alerts</div>
+        <div class="sc-value" style="color:${alerts.length?'var(--yellow)':'var(--green)'}">${alerts.length}</div>
+        <div class="sc-sub">${alerts.length ? 'Flags raised' : 'All clear'}</div>
+      </div>
+    </div>`;
 
-  const newsHTML=newsDigest.length?`
-    <div class="section"><h3>Today's News &amp; Events</h3>
-      ${newsDigest.map(n=>{
-        const t=new Date(n.datetime*1000);
-        const ts=t.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-        return `<div class="news-item"><span class="news-ticker-tag">${n.ticker}</span><a href="${n.url}" target="_blank" rel="noopener">${n.headline}</a><div class="news-meta">${n.source} · ${ts}</div></div>`;
-      }).join('')}
-    </div>`:'';
+  const alertHTML = alerts.length ? `
+    <div id="alert-section">
+      <div class="section" style="border-color:rgba(233,69,96,0.3);">
+        <h3>⚡ Alert Flags</h3>
+        ${alerts.map(a => `
+          <div class="alert-bar">
+            <span class="ab-ticker">${a.ticker}</span>
+            <span class="ab-reason">${a.reason}</span>
+            <span class="ab-pct ${a.pct>=0?'up':'dn'}">${a.pct>=0?'+':''}${a.pct.toFixed(2)}%</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
 
-  // Build holdings table
-  const holdingsTableHTML=`
-    <div class="section"><h3>All Holdings</h3>
-    <div class="tbl-wrap">
-    <table class="holdings-table">
-      <thead><tr>
-        <th>Ticker</th><th>Theme</th><th>Shares</th><th>Value</th>
-        <th>Price</th><th>Day%</th><th>Day$</th><th>Wt%</th>
-        <th>P/E</th><th>FwdPE</th><th>RevGr</th><th>EPSGr</th>
-        <th>Margin</th><th>ROE</th><th>D/E</th><th>Beta</th>
-        <th>52wLo</th><th>52wHi</th><th>PT</th>
-        <th>Short%</th><th>EPS Surp 4Q</th><th>Insider</th><th>Vol</th><th>Rating</th>
-      </tr></thead>
-      <tbody>
-        ${quoteData.map(q=>{
-          if (q.error) return `<tr><td><strong>${q.ticker}</strong></td><td><span class="theme-tag">${q.theme}</span></td><td colspan="22" class="na" style="font-size:.75rem">⚠ ${q.error==='no data'?'No market data':'Fetch error'}</td></tr>`;
-          const f=fundamentals[q.ticker]||{};
-          const pt=ptMap[q.ticker];
-          const ins=insiderMap[q.ticker];
-          const si=shortMap[q.ticker];
-          const surp=surprises[q.ticker];
-          const sh=shares[q.ticker]||0;
-          const pv=positionValues[q.ticker]||0;
-          const wt=totalValue>0&&pv>0?(pv/totalValue*100).toFixed(1):null;
-          const dayDollar=sh>0?sh*(q.change||0):null;
-          const insColor=ins?(ins.net>0?'color:var(--up)':ins.net<0?'color:var(--dn)':''):'';
-          const surpHTML=surp?surp.map(e=>{
-            if (e.surprisePct==null) return '<span class="na">—</span>';
-            return `<span class="${e.surprisePct>=0?'beat':'miss'}">${e.surprisePct>=0?'+':''}${e.surprisePct.toFixed(1)}%</span>`;
-          }).join(' '):' <span class="na">—</span>';
-          return `<tr>
-            <td><strong>${q.ticker}</strong></td>
-            <td><span class="theme-tag">${q.theme}</span></td>
-            <td>${sh>0?sh.toLocaleString():'<span class="na">—</span>'}</td>
-            <td>${pv>0?dollar(pv):'<span class="na">—</span>'}</td>
-            <td>${fmtP(q.price)}</td>
-            <td>${fmt(q.pct)}</td>
-            <td>${dayDollar!=null?`<span class="${dayDollar>=0?'up':'dn'}">${dayDollar>=0?'+':'−'}$${Math.abs(dayDollar).toFixed(0)}</span>`:'<span class="na">—</span>'}</td>
-            <td>${wt?`${wt}%`:'<span class="na">—</span>'}</td>
-            <td>${f.pe!=null?f.pe.toFixed(1):'<span class="na">—</span>'}</td>
-            <td>${f.forwardPE!=null?f.forwardPE.toFixed(1):'<span class="na">—</span>'}</td>
-            <td>${f.revenueGrowth!=null?`${(f.revenueGrowth*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
-            <td>${f.epsGrowth!=null?`${(f.epsGrowth*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
-            <td>${f.netMargin!=null?`${(f.netMargin*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
-            <td>${f.roe!=null?`${(f.roe*100).toFixed(1)}%`:'<span class="na">—</span>'}</td>
-            <td>${f.debtToEquity!=null?f.debtToEquity.toFixed(2):'<span class="na">—</span>'}</td>
-            <td>${f.beta!=null?f.beta.toFixed(2):'<span class="na">—</span>'}</td>
-            <td>${f.week52Low!=null?'$'+f.week52Low.toFixed(0):'<span class="na">—</span>'}</td>
-            <td>${f.week52High!=null?'$'+f.week52High.toFixed(0):'<span class="na">—</span>'}</td>
-            <td>${pt?'$'+pt.mean.toFixed(0):'<span class="na">—</span>'}</td>
-            <td>${si?.shortPct!=null?`${si.shortPct.toFixed(1)}%`:'<span class="na">—</span>'}</td>
-            <td style="font-size:.72rem;">${surpHTML}</td>
-            <td style="${insColor}">${ins?`${ins.buys}B/${ins.sells}S`:'<span class="na">—</span>'}</td>
-            <td>${volumeFlags[q.ticker]?`<span class="vol-high">⚑${volumeFlags[q.ticker]}x</span>`:'<span class="na">—</span>'}</td>
-            <td id="rating-${q.ticker}"><span class="na">…</span></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table></div></div>
-    ${(noData.length||networkFailures.length)?`<div class="section"><p class="data-gaps">${noData.length?'No data: '+noData.join(', ')+'. ':''}${networkFailures.length?'Errors: '+networkFailures.join(' · '):''}</p></div>`:''}
-    <button class="re-run" onclick="location.reload()">↺ Run again</button>`;
+  const warnHTML = networkFailures.length ? `
+    <div class="warn-box">
+      <strong>⚠ Network issues detected</strong><br>
+      Tickers excluded after retries: <code>${networkFailures.join(' · ')}</code><br>
+      Typically caused by Finnhub rate-limiting. Run again to retry.
+    </div>` : '';
 
-  ra.innerHTML=`
+  // Sector bars
+  const maxAbsSector = Math.max(...sectors.map(s => Math.abs(s.avg)), 0.01);
+  const sectorColors = ['var(--green)','#64c8ff','#c8a0ff','var(--yellow)','var(--red)'];
+  const sectorHTML = `
+    <div class="section">
+      <h3>Sector Performance</h3>
+      ${sectors.filter(s => s.name !== 'Benchmark' && s.name !== 'ETF').map((s,i) => `
+        <div class="sector-row">
+          <span class="sector-label">${s.name}</span>
+          <div class="sector-bar-wrap">
+            <div class="sector-bar-fill" style="width:${Math.abs(s.avg)/maxAbsSector*100}%;background:${s.avg>=0?'var(--green)':'var(--red)'}"></div>
+          </div>
+          <span class="sector-pct ${s.avg>=0?'up':'dn'}">${s.avg>=0?'+':''}${s.avg.toFixed(2)}%</span>
+        </div>`).join('')}
+    </div>`;
+
+  // Holdings table
+  const holdingsHTML = `
+    <div class="section">
+      <h3>Holdings</h3>
+      <div style="overflow-x:auto;">
+      <table class="holdings-table">
+        <thead><tr>
+          <th>Ticker</th>
+          <th>Theme</th>
+          <th class="r">Price</th>
+          <th class="r">Change</th>
+          <th class="r">Day %</th>
+          <th class="r hide-mobile">Day Range</th>
+          <th class="r hide-mobile">52w Position</th>
+          <th class="r hide-mobile">Earnings</th>
+        </tr></thead>
+        <tbody>
+          ${quoteData.filter(q => q.theme !== 'Benchmark').map(q => {
+            const r = rangeMap[q.ticker] || {};
+            let rangePos = null;
+            if (r.high52 && r.low52 && q.price) {
+              rangePos = (q.price - r.low52) / (r.high52 - r.low52) * 100;
+              rangePos = Math.min(100, Math.max(0, rangePos));
+            }
+            const earnDate = earningsMap[q.ticker] || '';
+            const isAlert = alerts.find(a => a.ticker === q.ticker);
+            return `<tr>
+              <td class="ticker-cell">${isAlert ? '⚡ ' : ''}${q.ticker}</td>
+              <td><span class="theme-badge">${q.theme}</span></td>
+              <td class="r">${fmtP(q.price)}</td>
+              <td class="r">${fmtChange(q.change)}</td>
+              <td class="r">${fmt(q.pct)}</td>
+              <td class="r hide-mobile" style="font-size:0.75rem;color:var(--dim);">
+                ${q.low?fmtP(q.low):'—'} – ${q.high?fmtP(q.high):'—'}
+              </td>
+              <td class="r hide-mobile">
+                ${rangePos !== null ? `
+                  <div style="display:flex;align-items:center;gap:0.4rem;justify-content:flex-end;">
+                    <span style="font-size:0.72rem;color:var(--dim);">${rangePos.toFixed(0)}%</span>
+                    <div class="range-bar-wrap"><div class="range-bar-fill" style="width:${rangePos}%"></div></div>
+                  </div>` : '<span class="na">n/a</span>'}
+              </td>
+              <td class="r hide-mobile" style="font-size:0.75rem;color:${earnDate?'var(--yellow)':'var(--dim)'};">
+                ${earnDate || '—'}
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+
+  const newsHTML = newsDigest.length ? `
+    <div class="section">
+      <h3>Today's News</h3>
+      ${newsDigest.map(n => `
+        <div class="news-item">
+          <div class="news-ticker">${n.ticker}</div>
+          <div>
+            <div class="news-headline">${n.headline}</div>
+            <div class="news-source">${n.source}</div>
+          </div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const today = new Date().toLocaleDateString('en-US',
+    { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  ra.innerHTML = `
     <div class="report-header">
       <h2>Close-of-Market Brief</h2>
-      <p>${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</p>
+      <span class="report-date">${today}</span>
+      <button class="re-run" onclick="location.reload()">↺ Run again</button>
     </div>
-    ${networkWarn}
-    ${portfolioBanner}
-    ${newsHTML}
-    <div class="section">
-      <h3>Top Movers</h3>
-      <div class="movers-grid">
-        <div class="mover-col gainers"><h4>Gainers</h4>
-          ${gainers.map(g=>`<div style="margin-bottom:6px;font-size:.88rem"><strong>${g.ticker}</strong> ${fmtP(g.price)} ${fmt(g.pct)}</div>`).join('')}
-        </div>
-        <div class="mover-col decliners"><h4>Decliners</h4>
-          ${decliners.map(d=>`<div style="margin-bottom:6px;font-size:.88rem"><strong>${d.ticker}</strong> ${fmtP(d.price)} ${fmt(d.pct)}</div>`).join('')}
-        </div>
-      </div>
-    </div>
-    ${Object.keys(earningsMap).length?`<div class="section"><h3>Upcoming Earnings (90 days)</h3><ul>${Object.entries(earningsMap).map(([t,d])=>`<li><strong>${t}</strong> — ${d}</li>`).join('')}</ul></div>`:''}
-    <div class="section" id="brief-section">
+    ${warnHTML}
+    ${scoreHTML}
+    ${alertHTML}
+    ${sectorHTML}
+    <div class="section" id="ai-brief-section">
       <h3>AI Brief</h3>
-      <div id="brief-stream" style="font-size:.93rem;line-height:1.85;color:#888;font-style:italic;">Generating narrative…</div>
+      <div id="brief-stream"><span class="streaming-cursor"></span></div>
     </div>
-    ${holdingsTableHTML}`;
+    ${newsHTML}
+    ${holdingsHTML}
+    ${renderArchive()}
+  `;
 
-  // Stream Claude
+  // ── 8. STREAM CLAUDE ───────────────────────────────────────
+  const prompt = `You are a portfolio analyst. Based on today's market close data, write a professional close-of-market brief (5–7 paragraphs). Cover: overall portfolio tone vs SPY/QQQ benchmarks, notable movers and why, thematic observations (AI/semis, energy, health, etc.), analyst consensus where relevant, significant news, upcoming earnings dates, and a forward-looking note. Weave data naturally into flowing prose. Separate paragraphs with ---. No bullet points.
+
+Portfolio average move: ${avgPct>=0?'+':''}${avgPct.toFixed(2)}% (vs SPY ${fmt(spy?.pct||null).replace(/<[^>]+>/g,'')}, QQQ ${fmt(qqq?.pct||null).replace(/<[^>]+>/g,'')})
+Gainers: ${gainCount} | Losers: ${lossCount}
+
+Holdings:
+${holdingsSummary}
+
+Alert flags:
+${alertSummary}
+
+Analyst consensus (buy/hold/sell):
+${analystSummary}
+
+News:
+${newsSummary}
+
+Upcoming earnings (90 days): ${earningsList}
+
+${networkFailures.length ? `Note: Data unavailable for: ${networkFailures.join(', ')}` : ''}
+
+Write the complete brief now.`;
+
+  const briefEl = document.getElementById('brief-stream');
+  let fullBrief = '';
+
   try {
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key':anthropicKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
       },
-      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:8000,stream:true,messages:[{role:'user',content:prompt}]})
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }]
+      })
     });
-    if (!res.ok) { const e=await res.json().catch(()=>({})); throw new Error(`Claude API ${res.status}: ${e.error?.message||res.statusText}`); }
 
-    const briefEl=document.getElementById('brief-stream');
-    briefEl.style.color=''; briefEl.style.fontStyle=''; briefEl.textContent='';
-    const reader=res.body.getReader(), decoder=new TextDecoder();
-    let buffer='', fullText='';
-    while(true) {
-      const {done,value}=await reader.read(); if(done)break;
-      buffer+=decoder.decode(value,{stream:true});
-      const lines=buffer.split('\n'); buffer=lines.pop();
-      for(const line of lines) {
-        if(!line.startsWith('data: '))continue;
-        const data=line.slice(6).trim(); if(data==='[DONE]')break;
-        try {
-          const evt=JSON.parse(data);
-          if(evt.type==='content_block_delta'&&evt.delta?.type==='text_delta') {
-            fullText+=evt.delta.text;
-            briefEl.innerHTML=fullText.split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean)
-              .map(p=>`<p style="margin-bottom:1.2em;">${p.replace(/\n/g,'<br>')}</p>`)
-              .join('<hr style="border:none;border-top:1px solid #ddd;margin:1.2em 0;">');
-          }
-        } catch{}
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      briefEl.innerHTML = `<span style="color:var(--red)">AI Brief unavailable: ${err.error?.message || res.statusText}. Check your API key.</span>`;
+    } else {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      briefEl.innerHTML = '<span class="streaming-cursor"></span>';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const ev = JSON.parse(data);
+            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+              fullBrief += ev.delta.text;
+              // Render with paragraph breaks
+              briefEl.innerHTML = fullBrief
+                .split(/\n?---\n?/)
+                .map(p => p.trim())
+                .filter(Boolean)
+                .map(p => `<p>${p.replace(/\n/g,'<br>')}</p>`)
+                .join('<hr>') + '<span class="streaming-cursor"></span>';
+              briefEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          } catch {}
+        }
       }
-    }
+      // Final render without cursor
+      briefEl.innerHTML = fullBrief
+        .split(/\n?---\n?/)
+        .map(p => p.trim())
+        .filter(Boolean)
+        .map(p => `<p>${p.replace(/\n/g,'<br>')}</p>`)
+        .join('<hr>');
 
-    // Parse ratings → badges — match "TICKER ... Add/Trim/Hold" or "Add/Trim/Hold ... TICKER"
-    const tickers=HOLDINGS.map(h=>h.ticker);
-    const ratingRx=/\b(NVDA|TSM|ASML|AVGO|QCOM|CSCO|DELL|CRWD|VEEV|AAPL|AMZN|BABA|WMT|DASH|NKE|NYT|GE|BA|CAT|DAL|FDX|WAB|XOM|CVX|COP|SO|BEP|BEPC|BAC|JPM|SPGI|COWZ|VRTX|JNJ|PFE|BMY|VTRS|PKX)\b[^.\n]{0,120}?\b(Add|Trim|Hold)\b|\b(Add|Trim|Hold)\b[^.\n]{0,60}?\b(NVDA|TSM|ASML|AVGO|QCOM|CSCO|DELL|CRWD|VEEV|AAPL|AMZN|BABA|WMT|DASH|NKE|NYT|GE|BA|CAT|DAL|FDX|WAB|XOM|CVX|COP|SO|BEP|BEPC|BAC|JPM|SPGI|COWZ|VRTX|JNJ|PFE|BMY|VTRS|PKX)\b/gi;
-    let m;
-    const rated=new Set();
-    while((m=ratingRx.exec(fullText))!==null) {
-      const ticker=(m[1]||m[4])?.toUpperCase();
-      const rating=(m[2]||m[3]);
-      if(!ticker||!rating||rated.has(ticker))continue;
-      rated.add(ticker);
-      const ratingNorm=rating.charAt(0).toUpperCase()+rating.slice(1).toLowerCase();
-      const el=document.getElementById(`rating-${ticker}`);
-      if(el){const cls=ratingNorm==='Add'?'badge-add':ratingNorm==='Trim'?'badge-trim':'badge-hold';el.innerHTML=`<span class="badge ${cls}">${ratingNorm}</span>`;}
+      // Save to archive
+      archiveSave({
+        date: new Date().toISOString(),
+        label: today,
+        brief: fullBrief,
+        avgPct: avgPct,
+        alerts: alerts.length,
+      });
+      // Re-render archive section
+      const archEl = document.getElementById('archive-section');
+      if (archEl) archEl.outerHTML = renderArchive();
     }
-  } catch(err) {
-    const el=document.getElementById('brief-stream');
-    if(el) el.innerHTML=`<div class="error-box"><strong>AI Brief unavailable</strong> ${err.message}</div>`;
+  } catch(e) {
+    briefEl.innerHTML = `<span style="color:var(--red)">NetworkError: ${e.message}. Check your API key and that api.anthropic.com is not blocked.</span>`;
   }
+}
+
+// ── ARCHIVE RENDERER ───────────────────────────────────────────
+function renderArchive() {
+  const list = archiveLoad();
+  if (!list.length) return '';
+  return `
+    <div class="section" id="archive-section">
+      <h3>Brief Archive (${list.length} entries)</h3>
+      ${list.map((e, i) => `
+        <div class="archive-entry">
+          <div class="archive-date">${new Date(e.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+            &nbsp;·&nbsp; Avg ${e.avgPct>=0?'+':''}${e.avgPct?.toFixed(2)||'—'}%
+            ${e.alerts ? `&nbsp;·&nbsp; <span style="color:var(--yellow)">⚡${e.alerts} alert${e.alerts!==1?'s':''}</span>` : ''}
+          </div>
+          <div class="archive-preview" id="ap-${i}">${e.brief?.slice(0,200)||''}…</div>
+          <button class="archive-expand-btn" onclick="toggleArchive(${i})">Read full brief ↓</button>
+          <div class="archive-full" id="af-${i}">
+            ${(e.brief||'').split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean).map(p=>`<p style="margin-bottom:0.8em">${p}</p>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function toggleArchive(i) {
+  const full = document.getElementById(`af-${i}`);
+  const prev = document.getElementById(`ap-${i}`);
+  const btn  = full.previousElementSibling;
+  const open = full.style.display === 'block';
+  full.style.display = open ? 'none' : 'block';
+  prev.style.display = open ? '-webkit-box' : 'none';
+  btn.textContent = open ? 'Read full brief ↓' : 'Collapse ↑';
 }
 </script>
 </body>
