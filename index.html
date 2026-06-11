@@ -154,6 +154,43 @@
   .warn-box { background: rgba(255,214,102,0.07); border: 1px solid rgba(255,214,102,0.3); border-radius: 8px; padding: 0.8rem 1rem; font-size: 0.82rem; margin-bottom: 1rem; color: var(--yellow); }
   .warn-box code { font-family: monospace; font-size: 0.8rem; color: var(--text); }
 
+
+  /* WATCHLIST */
+  .watchlist-add { display: flex; gap: 0.6rem; margin-bottom: 1rem; }
+  .watchlist-add input {
+    flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--white); padding: 0.5rem 0.8rem;
+    font-size: 0.88rem; font-family: monospace;
+  }
+  .watchlist-add input:focus { outline: none; border-color: var(--green); }
+  .watchlist-add button {
+    background: rgba(100,255,218,0.1); border: 1px solid var(--green);
+    color: var(--green); border-radius: 6px; padding: 0.5rem 1rem;
+    font-size: 0.85rem; cursor: pointer; font-weight: 600;
+    transition: background 0.2s;
+  }
+  .watchlist-add button:hover { background: rgba(100,255,218,0.2); }
+  .wl-row { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.6rem; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.82rem; flex-wrap: wrap; }
+  .wl-row:last-child { border-bottom: none; }
+  .wl-row:hover { background: rgba(255,255,255,0.02); border-radius: 4px; }
+  .wl-ticker { font-weight: 700; font-family: monospace; color: var(--white); min-width: 70px; }
+  .wl-price  { min-width: 70px; text-align: right; font-family: monospace; }
+  .wl-pct    { min-width: 70px; text-align: right; font-family: monospace; }
+  .wl-meta   { color: var(--dim); font-size: 0.75rem; flex: 1; }
+  .wl-signal { font-size: 0.75rem; font-weight: 700; min-width: 40px; text-align: center; }
+  .wl-note   { flex: 1; min-width: 140px; }
+  .wl-note input {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid transparent;
+    border-radius: 4px; color: var(--dim); font-size: 0.75rem; padding: 0.18rem 0.4rem;
+    font-family: 'Segoe UI', system-ui, sans-serif; transition: border-color 0.2s, color 0.2s;
+  }
+  .wl-note input:focus { outline: none; border-color: rgba(255,214,102,0.4); color: var(--yellow); background: rgba(255,214,102,0.05); }
+  .wl-note input::placeholder { color: rgba(136,146,176,0.3); }
+  .wl-remove { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 1rem; padding: 0 0.2rem; transition: color 0.2s; line-height: 1; }
+  .wl-remove:hover { color: var(--red); }
+  .wl-otc { font-size: 0.65rem; color: var(--yellow); border: 1px solid rgba(255,214,102,0.4); border-radius: 3px; padding: 0.05rem 0.3rem; margin-left: 0.3rem; }
+  .wl-na { color: var(--dim); font-size: 0.75rem; }
+
   /* PRINT */
   @media print {
     #setup-overlay, #progress-area, .hdr-btns, .note-input,
@@ -276,6 +313,9 @@ const KEYS_KEY         = 'hf_api_keys';
 const NOTES_KEY        = 'hf_ticker_notes';
 const SHARES_KEY       = 'hf_ticker_shares';
 const ARCHIVE_MAX      = 30;
+const WATCHLIST_KEY    = 'hf_watchlist';
+const WATCHLIST_NOTES_KEY = 'hf_watchlist_notes';
+const DEFAULT_WATCHLIST = ['ATZAF','NET','FIX','NFLX','COST','V','BLK','UNH','ABT','NEE'];
 const TECH_TOP_N       = 15;
 const QUICK_MODE_COUNT = 15;
 
@@ -317,6 +357,40 @@ function archiveSave(entry) {
   if (list.length > ARCHIVE_MAX) list.length = ARCHIVE_MAX;
   try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list)); } catch(e) {}
 }
+function loadWatchlist() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WATCHLIST_KEY));
+    if (saved && Array.isArray(saved) && saved.length > 0) return saved;
+  } catch(e) {}
+  return [...DEFAULT_WATCHLIST];
+}
+function saveWatchlist(list) {
+  try { localStorage.setItem(WATCHLIST_KEY, JSON.stringify(list)); } catch(e) {}
+}
+function loadWatchlistNotes() { try { return JSON.parse(localStorage.getItem(WATCHLIST_NOTES_KEY) || '{}'); } catch { return {}; } }
+function saveWatchlistNote(ticker, val) {
+  const n = loadWatchlistNotes();
+  if (val.trim()) n[ticker] = val.trim(); else delete n[ticker];
+  try { localStorage.setItem(WATCHLIST_NOTES_KEY, JSON.stringify(n)); } catch(e) {}
+}
+function addWatchlistTicker() {
+  const input = document.getElementById('wl-add-input');
+  const ticker = input.value.trim().toUpperCase();
+  if (!ticker) return;
+  const list = loadWatchlist();
+  if (list.includes(ticker)) { input.value = ''; return; }
+  list.push(ticker);
+  saveWatchlist(list);
+  input.value = '';
+  // Reload page to fetch new ticker data
+  location.reload();
+}
+function removeWatchlistTicker(ticker) {
+  const list = loadWatchlist().filter(t => t !== ticker);
+  saveWatchlist(list);
+  document.getElementById('wl-row-' + ticker).remove();
+}
+
 window.addEventListener('DOMContentLoaded', loadSavedKeys);
 
 // ── UTILITIES ─────────────────────────────────────────────────
@@ -555,6 +629,58 @@ async function startBrief() {
     await sleep(1100);
   }
 
+  // ── 9. WATCHLIST DATA ──────────────────────────────────────
+  setProgress(78, 'Fetching watchlist data…');
+  const watchTickers = loadWatchlist();
+  const watchData = [];
+  const watchFails = [];
+  for (let i = 0; i < watchTickers.length; i++) {
+    const t = watchTickers[i];
+    setProgress(78 + Math.round((i / watchTickers.length) * 4), 'Watchlist: ' + t);
+    const wd = { ticker: t, price: null, pct: null, change: null, high52: null, low52: null, target: null, rsi: null, signal: 'N/A', earnDate: null };
+    try {
+      const q = await finnhub('/quote?symbol=' + t);
+      wd.price  = q.c  || null;
+      wd.pct    = q.dp || null;
+      wd.change = q.d  || null;
+    } catch(e) { watchFails.push(t); }
+    await sleep(1100);
+    try {
+      const r = await finnhub('/stock/metric?symbol=' + t + '&metric=all');
+      const m = r.metric || {};
+      wd.high52 = m['52WeekHigh'] || null;
+      wd.low52  = m['52WeekLow']  || null;
+    } catch(e) {}
+    await sleep(1100);
+    try {
+      const pt = await finnhub('/stock/price-target?symbol=' + t);
+      if (pt && pt.targetMean) wd.target = pt.targetMean;
+    } catch(e) {}
+    await sleep(1100);
+    try {
+      const toTs2   = Math.floor(Date.now() / 1000);
+      const fromTs2 = toTs2 - 80 * 24 * 3600;
+      const c = await finnhub('/stock/candle?symbol=' + t + '&resolution=D&from=' + fromTs2 + '&to=' + toTs2);
+      if (c && c.s === 'ok' && c.c && c.c.length > 15) {
+        const sma20w = calcSMA(c.c, 20);
+        const sma50w = calcSMA(c.c, Math.min(50, c.c.length - 1));
+        const rsi14w = calcRSI(c.c, 14);
+        wd.rsi    = rsi14w;
+        wd.signal = technicalSignal(sma20w, sma50w, rsi14w, c.c[c.c.length - 1]);
+      }
+    } catch(e) {}
+    await sleep(1100);
+    try {
+      const fromDate2 = new Date().toISOString().slice(0,10);
+      const toDate2   = new Date(Date.now()+90*24*3600*1000).toISOString().slice(0,10);
+      const ec2 = await finnhub('/calendar/earnings?from=' + fromDate2 + '&to=' + toDate2);
+      const match2 = (ec2.earningsCalendar||[]).find(e => e.symbol === t);
+      if (match2) wd.earnDate = match2.date;
+    } catch(e) {}
+    await sleep(1100);
+    watchData.push(wd);
+  }
+
   // ── 9. ANALYST CONSENSUS ───────────────────────────────────
   setProgress(80, 'Fetching analyst consensus…');
   const analystMap = {};
@@ -569,7 +695,7 @@ async function startBrief() {
     await sleep(1100);
   }
 
-  // ── 10. COMPUTE ────────────────────────────────────────────
+  // ── 11. COMPUTE ────────────────────────────────────────────
   setProgress(88, 'Computing analysis…');
   const valid = quoteData.filter(q => q.pct != null && q.theme !== 'Benchmark');
   const sorted = [...valid].sort((a,b) => b.pct - a.pct);
@@ -634,7 +760,7 @@ async function startBrief() {
   const epsSummary = Object.entries(epsMap)
     .map(([t,e]) => t+': actual $'+(e.actual||0).toFixed(2)+' vs est $'+(e.estimate||0).toFixed(2)+' ('+(e.surprisePct>=0?'+':'')+(e.surprisePct||0).toFixed(1)+'% surprise) period '+e.date).join('\n') || 'none';
 
-  // ── 11. RENDER ─────────────────────────────────────────────
+  // ── 12. RENDER ─────────────────────────────────────────────
   setProgress(92, 'Rendering report…');
   const ra = document.getElementById('report-area');
   document.getElementById('progress-area').style.display = 'none';
@@ -778,6 +904,46 @@ async function startBrief() {
       + '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   })();
 
+  // Build watchlist section HTML
+  const wlNotes = loadWatchlistNotes();
+  const watchlistHTML = (function() {
+    let rows = '';
+    watchData.forEach(wd => {
+      const isOTC   = ['ATZAF'].includes(wd.ticker);
+      const noData  = wd.price === null;
+      const pctStr  = wd.pct != null ? '<span class="' + (wd.pct>=0?'up':'dn') + '">' + (wd.pct>=0?'+':'') + wd.pct.toFixed(2) + '%</span>' : '<span class="wl-na">—</span>';
+      const priceStr = wd.price != null ? '$' + wd.price.toFixed(2) : '<span class="wl-na">n/a</span>';
+      let rangePos = null;
+      if (wd.high52 && wd.low52 && wd.price)
+        rangePos = Math.min(100, Math.max(0, (wd.price - wd.low52) / (wd.high52 - wd.low52) * 100));
+      const rangePart = rangePos !== null
+        ? '52w: ' + rangePos.toFixed(0) + '%'
+        : '';
+      const targetPart = wd.target ? ' · target $' + wd.target.toFixed(0) : '';
+      const earnPart   = wd.earnDate ? ' · earnings ' + wd.earnDate : '';
+      const rsiPart    = wd.rsi != null ? ' · RSI ' + wd.rsi.toFixed(0) : '';
+      const sigClass   = wd.signal === 'BUY' ? 'signal-buy' : wd.signal === 'SELL' ? 'signal-sell' : 'signal-hold';
+      const note       = (wlNotes[wd.ticker] || '').replace(/"/g, '&quot;');
+      rows += '<div class="wl-row" id="wl-row-' + wd.ticker + '">'
+        + '<span class="wl-ticker">' + wd.ticker + (isOTC ? '<span class="wl-otc">OTC</span>' : '') + '</span>'
+        + '<span class="wl-price">' + priceStr + '</span>'
+        + '<span class="wl-pct">'   + pctStr   + '</span>'
+        + '<span class="wl-meta">'  + [rangePart, targetPart, earnPart, rsiPart].filter(Boolean).join('') + '</span>'
+        + '<span class="wl-signal ' + sigClass + '">' + (noData ? '—' : wd.signal) + '</span>'
+        + '<span class="wl-note"><input type="text" placeholder="thesis / notes…" value="' + note + '" data-wlticker="' + wd.ticker + '"></span>'
+        + '<button class="wl-remove" onclick="removeWatchlistTicker('' + wd.ticker + '')" title="Remove">✕</button>'
+        + '</div>';
+    });
+    return '<div class="section" id="watchlist-section" style="border-color:rgba(255,214,102,0.2);">'
+      + '<h3 style="color:var(--yellow);">👁 Watchlist — ' + watchData.length + ' stocks</h3>'
+      + '<div class="watchlist-add">'
+      + '<input type="text" id="wl-add-input" placeholder="Add ticker…" onkeydown="if(event.key==='Enter')addWatchlistTicker()">'
+      + '<button onclick="addWatchlistTicker()">+ Add</button>'
+      + '</div>'
+      + rows
+      + '</div>';
+  })();
+
   ra.innerHTML = '<div class="report-header">'
     + '<h2>Close-of-Market Brief' + (quickMode?' <span style="font-size:0.75rem;color:var(--yellow);">Quick Mode</span>':'') + '</h2>'
     + '<span class="report-date">' + today + '</span>'
@@ -785,7 +951,7 @@ async function startBrief() {
     + '</div>'
     + warnHTML + scoreHTML + alertHTML + sectorPerfHTML + weightHTML
     + '<div class="section" id="ai-brief-section"><h3>AI Brief</h3><div id="brief-stream"><span class="streaming-cursor"></span></div></div>'
-    + techHTML + epsHTML + insiderHTML + newsHTML + holdingsHTML + renderArchive();
+    + techHTML + epsHTML + insiderHTML + newsHTML + holdingsHTML + watchlistHTML + renderArchive();
 
   // Wire up inputs
   document.querySelectorAll('.shares-input').forEach(input => {
@@ -798,7 +964,13 @@ async function startBrief() {
     ta.addEventListener('input', () => saveNote(ta.dataset.ticker, ta.value));
   });
 
-  // ── 12. STREAM CLAUDE ──────────────────────────────────────
+  document.querySelectorAll('[data-wlticker]').forEach(input => {
+    input.addEventListener('input', () => saveWatchlistNote(input.dataset.wlticker, input.value));
+    input.addEventListener('focus', () => { input.style.borderColor = 'rgba(255,214,102,0.4)'; input.style.color = 'var(--yellow)'; });
+    input.addEventListener('blur',  () => { input.style.borderColor = 'transparent'; input.style.color = 'var(--dim)'; });
+  });
+
+  // ── 13. STREAM CLAUDE ──────────────────────────────────────
   const prompt = 'You are a senior portfolio analyst. Write a professional close-of-market brief in 7–9 paragraphs of flowing prose. Separate paragraphs with ---. No bullet points. Cover all of these sections in order:\n\n'
     + '1. MARKET OVERVIEW: Overall portfolio tone vs SPY/QQQ. How did the portfolio perform relative to benchmarks?\n'
     + '2. NOTABLE MOVERS: Top gainers and decliners and their likely drivers.\n'
@@ -809,7 +981,8 @@ async function startBrief() {
     + '7. INSIDER SIGNALS: What do the insider transactions suggest?\n'
     + '8. PORTFOLIO CONCENTRATION & DIVERSIFICATION: Based on sector weights, where is the portfolio overweight or underweight? Suggest 2–3 specific sectors or stocks worth exploring to reduce concentration risk.\n'
     + '9. RISK MANAGEMENT: Based on the largest positions and their technical picture, suggest where stop-loss levels, position sizing adjustments, or profit-taking might be worth considering. Be specific about tickers.\n'
-    + '10. FORWARD LOOK: Upcoming earnings to watch, and the overall near-term outlook.\n\n'
+    + '10. FORWARD LOOK: Upcoming earnings to watch, and the overall near-term outlook.\n'
+    + '11. WATCHLIST NOTE: Based on the watchlist data, briefly note 1–2 stocks that look particularly timely or interesting for potential addition to the portfolio, and why.\n\n'
     + 'DATA:\n'
     + 'Portfolio avg: ' + (avgPct>=0?'+':'') + avgPct.toFixed(2) + '% | SPY: ' + (spy?.pct?.toFixed(2)||'n/a') + '% | QQQ: ' + (qqq?.pct?.toFixed(2)||'n/a') + '%\n'
     + 'Estimated portfolio value: ' + totalValueFmt + '\n'
@@ -824,6 +997,7 @@ async function startBrief() {
     + 'Insider transactions:\n' + insiderSummary + '\n\n'
     + 'News:\n' + newsSummary + '\n\n'
     + 'Upcoming earnings (90 days): ' + earningsList + '\n'
+    + watchData.filter(w => w.price != null).map(w => 'WATCH ' + w.ticker + ': $' + (w.price||0).toFixed(2) + ' ' + (w.pct>=0?'+':'') + (w.pct||0).toFixed(2) + '%' + (w.target?' target $'+w.target.toFixed(0):'') + (w.rsi?' RSI '+w.rsi.toFixed(0):'') + ' signal '+w.signal).join(', ')
     + (networkFailures.length ? '\nData unavailable for: ' + networkFailures.join(', ') : '')
     + '\n\nWrite the complete brief now.';
 
