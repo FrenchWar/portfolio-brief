@@ -29,6 +29,1002 @@
     min-height: 100vh;
   }
 
+  /* SETUP */
+  #setup-overlay {
+    position: fixed; inset: 0;
+    background: rgba(10,10,20,0.92);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+  }
+  #setup-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem 3rem;
+    width: 460px;
+    max-width: 95vw;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+  }
+  #setup-box h1 { font-size:1.3rem; font-weight:600; color:var(--white); margin-bottom:0.3rem; }
+  #setup-box p  { color:var(--dim); font-size:0.85rem; margin-bottom:1.4rem; }
+  .field-group  { margin-bottom:1rem; }
+  .field-group label {
+    display:block; font-size:0.72rem; font-weight:600;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--dim); margin-bottom:0.35rem;
+  }
+  .field-group input, .field-group select {
+    width:100%; background:rgba(255,255,255,0.05);
+    border:1px solid var(--border); border-radius:6px;
+    color:var(--white); padding:0.6rem 0.85rem;
+    font-size:0.88rem; font-family:monospace;
+    transition:border-color 0.2s;
+  }
+  .field-group input:focus, .field-group select:focus { outline:none; border-color:var(--green); }
+  .field-group select { font-family: 'Segoe UI', system-ui, sans-serif; cursor:pointer; }
+  .field-group select option { background:var(--panel); }
+  .setup-row { display:flex; gap:0.8rem; }
+  .setup-row .field-group { flex:1; }
+  #generate-btn {
+    width:100%; background:linear-gradient(135deg,var(--accent),var(--gold));
+    color:#fff; border:none; border-radius:6px;
+    padding:0.8rem; font-size:0.95rem; font-weight:600;
+    cursor:pointer; margin-top:0.5rem; letter-spacing:0.03em;
+    transition:opacity 0.2s,transform 0.1s;
+  }
+  #generate-btn:hover { opacity:0.9; }
+  #generate-btn:active { transform:scale(0.98); }
+  #setup-error { color:var(--red); font-size:0.82rem; margin-top:0.7rem; display:none; }
+  .saved-badge {
+    font-size:0.7rem; color:var(--green); margin-left:0.5rem;
+    vertical-align:middle; display:none;
+  }
+  .clear-keys {
+    background:none; border:none; color:var(--dim);
+    font-size:0.75rem; cursor:pointer; text-decoration:underline;
+    margin-top:0.5rem; display:block;
+  }
+  .clear-keys:hover { color:var(--red); }
+
+  /* PROGRESS */
+  #progress-area { display:none; padding:3rem 2rem; text-align:center; }
+  .progress-bar-wrap {
+    background:rgba(255,255,255,0.08); border-radius:99px;
+    height:6px; width:320px; margin:1.2rem auto 0.8rem; overflow:hidden;
+  }
+  .progress-bar-fill {
+    height:100%; background:linear-gradient(90deg,var(--accent),var(--green));
+    border-radius:99px; transition:width 0.4s ease; width:0%;
+  }
+  #progress-label { color:var(--dim); font-size:0.85rem; }
+
+  /* MAIN */
+  #report-area { display:none; max-width:1100px; margin:0 auto; padding:1.5rem 1.5rem 4rem; }
+
+  .report-header {
+    display:flex; align-items:baseline; justify-content:space-between;
+    flex-wrap:wrap; gap:0.5rem;
+    padding-bottom:1rem; border-bottom:1px solid var(--border); margin-bottom:1.5rem;
+  }
+  .report-header h2 { font-size:1.4rem; font-weight:700; color:var(--white); }
+  .report-date { color:var(--dim); font-size:0.82rem; }
+  .hdr-btns { display:flex; gap:0.5rem; flex-wrap:wrap; }
+  .hdr-btn {
+    background:transparent; border:1px solid var(--border);
+    color:var(--green); border-radius:6px;
+    padding:0.4rem 1rem; font-size:0.82rem; cursor:pointer;
+    transition:background 0.2s;
+  }
+  .hdr-btn:hover { background:rgba(100,255,218,0.07); }
+  .hdr-btn.print-btn { color:var(--yellow); border-color:rgba(255,214,102,0.3); }
+  .hdr-btn.print-btn:hover { background:rgba(255,214,102,0.07); }
+
+  /* SCORECARD */
+  .scorecard {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr));
+    gap:0.9rem; margin-bottom:1.5rem;
+  }
+  .score-card {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; padding:1rem 1.2rem;
+  }
+  .score-card .sc-label {
+    font-size:0.7rem; font-weight:600; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--dim); margin-bottom:0.4rem;
+  }
+  .score-card .sc-value { font-size:1.5rem; font-weight:700; line-height:1; color:var(--white); }
+  .score-card .sc-sub  { font-size:0.75rem; color:var(--dim); margin-top:0.25rem; }
+
+  /* ALERTS */
+  #alert-section { margin-bottom:1.5rem; }
+  .alert-bar {
+    display:flex; align-items:center; gap:0.7rem;
+    background:rgba(233,69,96,0.1); border:1px solid rgba(233,69,96,0.3);
+    border-radius:8px; padding:0.65rem 1rem; margin-bottom:0.45rem; font-size:0.85rem;
+  }
+  .alert-bar .ab-ticker { font-weight:700; font-family:monospace; color:var(--yellow); min-width:58px; }
+  .alert-bar .ab-reason { color:var(--text); flex:1; }
+  .alert-bar .ab-pct    { font-weight:700; font-family:monospace; }
+
+  /* SECTIONS */
+  .section {
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:10px; padding:1.2rem 1.4rem; margin-bottom:1.2rem;
+  }
+  .section h3 {
+    font-size:0.72rem; font-weight:700; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--green); margin-bottom:1rem;
+  }
+
+  /* HOLDINGS TABLE */
+  .holdings-table { width:100%; border-collapse:collapse; font-size:0.82rem; }
+  .holdings-table th {
+    text-align:left; padding:0 0.6rem 0.6rem;
+    font-size:0.67rem; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--dim);
+    border-bottom:1px solid var(--border);
+  }
+  .holdings-table th.r, .holdings-table td.r { text-align:right; }
+  .holdings-table td {
+    padding:0.45rem 0.6rem;
+    border-bottom:1px solid rgba(255,255,255,0.04);
+    vertical-align:middle;
+  }
+  .holdings-table tr:last-child td { border-bottom:none; }
+  .holdings-table tr:hover td { background:rgba(255,255,255,0.03); }
+  .ticker-cell { font-weight:700; font-family:monospace; color:var(--white); }
+  .theme-badge {
+    display:inline-block; font-size:0.65rem; padding:0.15rem 0.5rem;
+    border-radius:99px; background:rgba(83,52,131,0.5);
+    border:1px solid rgba(83,52,131,0.8); color:#c9b8ff; white-space:nowrap;
+  }
+  .up { color:var(--green); } .dn { color:var(--red); } .na { color:var(--dim); }
+  .range-bar-wrap {
+    width:70px; height:6px; background:rgba(255,255,255,0.1);
+    border-radius:99px; overflow:hidden; display:inline-block; vertical-align:middle;
+  }
+  .range-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:99px; }
+
+  /* NOTES */
+  .note-cell { max-width:160px; }
+  .note-input {
+    width:100%; background:rgba(255,255,255,0.04);
+    border:1px solid transparent; border-radius:4px;
+    color:var(--dim); font-size:0.75rem; padding:0.2rem 0.4rem;
+    font-family:'Segoe UI',system-ui,sans-serif;
+    transition:border-color 0.2s, color 0.2s;
+    resize:none; overflow:hidden; height:24px;
+  }
+  .note-input:focus {
+    outline:none; border-color:rgba(255,214,102,0.4);
+    color:var(--yellow); background:rgba(255,214,102,0.05);
+  }
+  .note-input::placeholder { color:rgba(136,146,176,0.4); }
+
+  /* INSIDER */
+  .insider-bar {
+    display:flex; align-items:center; gap:0.6rem;
+    padding:0.5rem 0; border-bottom:1px solid rgba(255,255,255,0.05);
+    font-size:0.82rem;
+  }
+  .insider-bar:last-child { border-bottom:none; }
+  .ins-ticker { font-weight:700; font-family:monospace; color:var(--white); min-width:58px; }
+  .ins-name   { color:var(--dim); flex:1; font-size:0.78rem; }
+  .ins-type   { font-weight:600; font-size:0.75rem; padding:0.1rem 0.5rem; border-radius:99px; }
+  .ins-buy    { background:rgba(100,255,218,0.12); color:var(--green); }
+  .ins-sell   { background:rgba(255,107,107,0.12); color:var(--red); }
+  .ins-shares { font-family:monospace; font-size:0.78rem; color:var(--dim); }
+
+  /* NEWS */
+  .news-item {
+    display:flex; gap:0.8rem; padding:0.6rem 0;
+    border-bottom:1px solid rgba(255,255,255,0.05);
+  }
+  .news-item:last-child { border-bottom:none; }
+  .news-ticker { font-weight:700; font-family:monospace; color:var(--yellow); min-width:55px; font-size:0.8rem; padding-top:0.1rem; }
+  .news-headline { font-size:0.85rem; color:var(--text); }
+  .news-source   { font-size:0.72rem; color:var(--dim); margin-top:0.1rem; }
+
+  /* AI BRIEF */
+  #brief-stream { font-size:0.92rem; line-height:1.85; color:var(--text); }
+  #brief-stream p  { margin-bottom:1.1em; }
+  #brief-stream hr { border:none; border-top:1px solid var(--border); margin:1.1em 0; }
+  .streaming-cursor {
+    display:inline-block; width:2px; height:1em;
+    background:var(--green); animation:blink 1s steps(1) infinite;
+    vertical-align:text-bottom; margin-left:2px;
+  }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* SECTOR */
+  .sector-row { display:flex; align-items:center; gap:0.8rem; margin-bottom:0.55rem; font-size:0.82rem; }
+  .sector-label { min-width:130px; color:var(--dim); }
+  .sector-bar-wrap { flex:1; height:8px; background:rgba(255,255,255,0.08); border-radius:99px; overflow:hidden; }
+  .sector-bar-fill { height:100%; border-radius:99px; }
+  .sector-pct { min-width:48px; text-align:right; font-family:monospace; }
+
+  /* ARCHIVE */
+  .archive-entry { border-bottom:1px solid var(--border); padding:0.8rem 0; }
+  .archive-entry:last-child { border-bottom:none; }
+  .archive-date { font-size:0.75rem; color:var(--dim); font-family:monospace; margin-bottom:0.3rem; }
+  .archive-preview {
+    font-size:0.83rem; color:var(--text);
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .archive-expand-btn {
+    background:transparent; border:none; color:var(--green);
+    font-size:0.75rem; cursor:pointer; padding:0.2rem 0; margin-top:0.2rem; display:block;
+  }
+  .archive-full { display:none; font-size:0.83rem; color:var(--text); margin-top:0.4rem; }
+
+  /* WARN */
+  .warn-box {
+    background:rgba(255,214,102,0.07); border:1px solid rgba(255,214,102,0.3);
+    border-radius:8px; padding:0.8rem 1rem; font-size:0.82rem; margin-bottom:1rem; color:var(--yellow);
+  }
+  .warn-box code { font-family:monospace; font-size:0.8rem; color:var(--text); }
+
+  /* MODE TOGGLE */
+  .mode-toggle { display:flex; gap:0.5rem; margin-bottom:0.8rem; }
+  .mode-btn {
+    flex:1; padding:0.5rem; border-radius:6px; border:1px solid var(--border);
+    background:transparent; color:var(--dim); font-size:0.8rem; cursor:pointer;
+    transition:all 0.2s;
+  }
+  .mode-btn.active { background:rgba(83,52,131,0.4); color:var(--white); border-color:var(--accent); }
+
+  /* PRINT */
+  @media print {
+    #setup-overlay, #progress-area, .hdr-btns, .note-input,
+    #insider-section, #archive-section, .holdings-table { display:none !important; }
+    body { background:#fff; color:#000; font-size:12px; }
+    .section { border:1px solid #ddd; background:#fff; }
+    .section h3 { color:#333; }
+    #brief-stream p { color:#111; }
+    #report-area { display:block !important; padding:0; }
+    .score-card { border:1px solid #ddd; background:#f9f9f9; }
+    .sc-value, .sc-label, .sc-sub { color:#111 !important; }
+    .up { color:#006400 !important; } .dn { color:#8b0000 !important; }
+  }
+
+  @media(max-width:640px) {
+    .scorecard { grid-template-columns:repeat(2,1fr); }
+    .holdings-table .hide-mobile { display:none; }
+    #report-area { padding:1rem 0.75rem 3rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div id="setup-overlay">
+  <div id="setup-box">
+    <h1>Portfolio Close-of-Market Brief</h1>
+    <p>Enter your API keys to generate today's brief. Keys are saved in your browser — one-time setup.</p>
+    <div class="setup-row">
+      <div class="field-group">
+        <label>Anthropic API Key <span class="saved-badge" id="ant-saved">✓ saved</span></label>
+        <input type="password" id="anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+      </div>
+    </div>
+    <div class="setup-row">
+      <div class="field-group">
+        <label>Finnhub API Key <span class="saved-badge" id="fin-saved">✓ saved</span></label>
+        <input type="password" id="finnhub-key" placeholder="your-finnhub-key" autocomplete="off">
+      </div>
+    </div>
+    <div class="field-group">
+      <label>Mode</label>
+      <select id="run-mode">
+        <option value="full">Full Brief — all 44 tickers (~8 min)</option>
+        <option value="quick">Quick Brief — top movers only (~2 min)</option>
+      </select>
+    </div>
+    <div id="setup-error"></div>
+    <button id="generate-btn" onclick="startBrief()">Generate Brief</button>
+    <button class="clear-keys" onclick="clearSavedKeys()">Clear saved keys</button>
+  </div>
+</div>
+
+<!-- PROGRESS -->
+<div id="progress-area">
+  <div style="color:var(--white);font-size:1rem;font-weight:600;">Building your brief…</div>
+  <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progress-fill"></div></div>
+  <div id="progress-label">Initialising…</div>
+</div>
+
+<!-- REPORT -->
+<div id="report-area"></div>
+
+<script>
+// ── HOLDINGS ──────────────────────────────────────────────────
+const ALL_HOLDINGS = [
+  {ticker:'AAPL',  theme:'Big Tech'},
+  {ticker:'AMZN',  theme:'Big Tech'},
+  {ticker:'ASML',  theme:'Semis'},
+  {ticker:'BA',    theme:'Industrial'},
+  {ticker:'BABA',  theme:'China Tech'},
+  {ticker:'BAC',   theme:'Financials'},
+  {ticker:'BEP',   theme:'Clean Energy'},
+  {ticker:'BEPC',  theme:'Clean Energy'},
+  {ticker:'BMY',   theme:'Healthcare'},
+  {ticker:'CAT',   theme:'Industrial'},
+  {ticker:'COP',   theme:'Energy'},
+  {ticker:'COWZ',  theme:'ETF'},
+  {ticker:'CRWD',  theme:'Cybersecurity'},
+  {ticker:'CSCO',  theme:'Big Tech'},
+  {ticker:'CVX',   theme:'Energy'},
+  {ticker:'DAL',   theme:'Transport'},
+  {ticker:'DASH',  theme:'Consumer Tech'},
+  {ticker:'DELL',  theme:'Big Tech'},
+  {ticker:'FDX',   theme:'Transport'},
+  {ticker:'GE',    theme:'Industrial'},
+  {ticker:'GEHC',  theme:'Healthcare'},
+  {ticker:'GEV',   theme:'Industrial'},
+  {ticker:'GM',    theme:'Autos'},
+  {ticker:'HD',    theme:'Consumer'},
+  {ticker:'IBIT',  theme:'Crypto'},
+  {ticker:'INTC',  theme:'Semis'},
+  {ticker:'JNJ',   theme:'Healthcare'},
+  {ticker:'JPM',   theme:'Financials'},
+  {ticker:'MOG.A', theme:'Industrial'},
+  {ticker:'MSFT',  theme:'Big Tech'},
+  {ticker:'NKE',   theme:'Consumer'},
+  {ticker:'NVDA',  theme:'Semis'},
+  {ticker:'NYT',   theme:'Media'},
+  {ticker:'PFE',   theme:'Healthcare'},
+  {ticker:'PKX',   theme:'Materials'},
+  {ticker:'QCOM',  theme:'Semis'},
+  {ticker:'SO',    theme:'Utilities'},
+  {ticker:'SPGI',  theme:'Financials'},
+  {ticker:'TSM',   theme:'Semis'},
+  {ticker:'VRTX',  theme:'Healthcare'},
+  {ticker:'VTRS',  theme:'Healthcare'},
+  {ticker:'WAB',   theme:'Industrial'},
+  {ticker:'WMT',   theme:'Consumer'},
+  {ticker:'XOM',   theme:'Energy'},
+  {ticker:'SPY',   theme:'Benchmark'},
+  {ticker:'QQQ',   theme:'Benchmark'},
+];
+
+const ALERT_THRESHOLD = 3.0;
+const NEAR_RANGE_PCT  = 5.0;
+const ARCHIVE_KEY     = 'hf_portfolio_archive';
+const KEYS_KEY        = 'hf_api_keys';
+const NOTES_KEY       = 'hf_ticker_notes';
+const SHARES_KEY      = 'hf_ticker_shares';
+const ARCHIVE_MAX     = 30;
+const QUICK_MODE_COUNT = 15;
+
+let anthropicKey = '', finnhubKey = '', quickMode = false;
+
+// ── KEY PERSISTENCE ───────────────────────────────────────────
+function loadSavedKeys() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEYS_KEY) || '{}');
+    if (saved.anthropic) {
+      document.getElementById('anthropic-key').value = saved.anthropic;
+      document.getElementById('ant-saved').style.display = 'inline';
+    }
+    if (saved.finnhub) {
+      document.getElementById('finnhub-key').value = saved.finnhub;
+      document.getElementById('fin-saved').style.display = 'inline';
+    }
+  } catch(e) {}
+}
+function saveKeys(ant, fin) {
+  try { localStorage.setItem(KEYS_KEY, JSON.stringify({anthropic: ant, finnhub: fin})); } catch(e) {}
+}
+function clearSavedKeys() {
+  try { localStorage.removeItem(KEYS_KEY); } catch(e) {}
+  document.getElementById('anthropic-key').value = '';
+  document.getElementById('finnhub-key').value = '';
+  document.getElementById('ant-saved').style.display = 'none';
+  document.getElementById('fin-saved').style.display = 'none';
+}
+window.addEventListener('DOMContentLoaded', loadSavedKeys);
+
+// ── NOTES ─────────────────────────────────────────────────────
+function loadNotes() {
+  try { return JSON.parse(localStorage.getItem(NOTES_KEY) || '{}'); } catch { return {}; }
+}
+function saveNote(ticker, text) {
+  const notes = loadNotes();
+  if (text.trim()) notes[ticker] = text.trim();
+  else delete notes[ticker];
+  try { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); } catch(e) {}
+}
+
+// ── SHARES ────────────────────────────────────────────────────
+function loadShares() {
+  try { return JSON.parse(localStorage.getItem(SHARES_KEY) || '{}'); } catch { return {}; }
+}
+function saveShare(ticker, val) {
+  const shares = loadShares();
+  const n = parseFloat(val);
+  if (!isNaN(n) && n > 0) shares[ticker] = n;
+  else delete shares[ticker];
+  try { localStorage.setItem(SHARES_KEY, JSON.stringify(shares)); } catch(e) {}
+}
+
+// ── UTILITIES ─────────────────────────────────────────────────
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function finnhub(path) {
+  const url = `https://finnhub.io/api/v1${path}&token=${finnhubKey}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Finnhub ${res.status}`);
+  return res.json();
+}
+
+// ── ARCHIVE ────────────────────────────────────────────────────
+function archiveLoad() {
+  try { return JSON.parse(localStorage.getItem(ARCHIVE_KEY) || '[]'); } catch { return []; }
+}
+function archiveSave(entry) {
+  const list = archiveLoad();
+  list.unshift(entry);
+  if (list.length > ARCHIVE_MAX) list.length = ARCHIVE_MAX;
+  try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(list)); } catch(e) {}
+}
+
+// ── MAIN ──────────────────────────────────────────────────────
+async function startBrief() {
+  anthropicKey = document.getElementById('anthropic-key').value.trim();
+  finnhubKey   = document.getElementById('finnhub-key').value.trim();
+  quickMode    = document.getElementById('run-mode').value === 'quick';
+
+  const errEl = document.getElementById('setup-error');
+  if (!anthropicKey || !anthropicKey.startsWith('sk-ant')) {
+    errEl.textContent = 'Please enter a valid Anthropic API key (starts with sk-ant-).';
+    errEl.style.display = 'block'; return;
+  }
+  if (!finnhubKey) {
+    errEl.textContent = 'Please enter your Finnhub API key.';
+    errEl.style.display = 'block'; return;
+  }
+  errEl.style.display = 'none';
+  saveKeys(anthropicKey, finnhubKey);
+
+  document.getElementById('setup-overlay').style.display = 'none';
+  const progArea = document.getElementById('progress-area');
+  progArea.style.display = 'block';
+  setProgress(2, 'Fetching quotes…');
+
+  // Determine working set
+  let HOLDINGS = quickMode
+    ? ALL_HOLDINGS.filter(h => h.theme === 'Benchmark').concat(
+        ALL_HOLDINGS.filter(h => h.theme !== 'Benchmark').slice(0, QUICK_MODE_COUNT))
+    : ALL_HOLDINGS;
+
+  // ── 1. QUOTES ──────────────────────────────────────────────
+  const quoteData = [], networkFailures = [];
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const h = HOLDINGS[i];
+    setProgress(2 + Math.round((i / HOLDINGS.length) * 30), `Quote ${i+1}/${HOLDINGS.length}: ${h.ticker}`);
+    try {
+      const q = await finnhub(`/quote?symbol=${h.ticker}`);
+      quoteData.push({ ...h, price:q.c||null, change:q.d||null, pct:q.dp||null,
+        high:q.h||null, low:q.l||null, prevClose:q.pc||null });
+    } catch(e) {
+      networkFailures.push(h.ticker);
+      quoteData.push({ ...h, price:null, change:null, pct:null, high:null, low:null, prevClose:null });
+    }
+    await sleep(1100);
+  }
+
+  // ── 2. 52-WEEK RANGES ──────────────────────────────────────
+  setProgress(34, 'Fetching 52-week ranges…');
+  const rangeMap = {};
+  for (let i = 0; i < HOLDINGS.length; i++) {
+    const t = HOLDINGS[i].ticker;
+    if (t === 'SPY' || t === 'QQQ') continue;
+    try {
+      const r = await finnhub(`/stock/metric?symbol=${t}&metric=all`);
+      const m = r.metric || {};
+      rangeMap[t] = { high52: m['52WeekHigh']||null, low52: m['52WeekLow']||null };
+    } catch(e) { rangeMap[t] = { high52:null, low52:null }; }
+    await sleep(1100);
+    setProgress(34 + Math.round((i / HOLDINGS.length) * 14), `52w range ${i+1}/${HOLDINGS.length}: ${t}`);
+  }
+
+  // ── 3. INSIDER TRANSACTIONS ────────────────────────────────
+  setProgress(50, 'Fetching insider transactions…');
+  const insiderData = [];
+  const insiderTickers = HOLDINGS.filter(h => h.theme !== 'Benchmark' && h.theme !== 'ETF')
+    .slice(0, quickMode ? 8 : 15).map(h => h.ticker);
+  for (const ticker of insiderTickers) {
+    try {
+      const ins = await finnhub(`/stock/insider-transactions?symbol=${ticker}`);
+      const txns = (ins.data || []).filter(t => t.transactionType === 'P-Purchase' || t.transactionType === 'S-Sale');
+      if (txns.length > 0) {
+        const latest = txns[0];
+        insiderData.push({
+          ticker,
+          name: latest.name || 'Executive',
+          type: latest.transactionType === 'P-Purchase' ? 'BUY' : 'SELL',
+          shares: latest.share || 0,
+          date: latest.transactionDate || '',
+        });
+      }
+    } catch(e) {}
+    await sleep(1100);
+  }
+
+  // ── 4. EARNINGS ────────────────────────────────────────────
+  setProgress(58, 'Fetching earnings calendar…');
+  const earningsMap = {};
+  try {
+    const fromDate = new Date().toISOString().slice(0,10);
+    const toDate   = new Date(Date.now()+90*24*3600*1000).toISOString().slice(0,10);
+    const ec = await finnhub(`/calendar/earnings?from=${fromDate}&to=${toDate}`);
+    (ec.earningsCalendar||[]).forEach(e => {
+      if (HOLDINGS.find(h => h.ticker === e.symbol)) earningsMap[e.symbol] = e.date;
+    });
+  } catch(e) {}
+
+  // ── 5. NEWS ────────────────────────────────────────────────
+  setProgress(62, 'Fetching news…');
+  const newsDigest = [];
+  const valid0 = quoteData.filter(q => q.pct != null);
+  const topTickers = [...valid0].sort((a,b) => Math.abs(b.pct)-Math.abs(a.pct))
+    .slice(0, quickMode ? 8 : 12).map(q => q.ticker);
+  for (const ticker of topTickers) {
+    try {
+      const today     = new Date().toISOString().slice(0,10);
+      const yesterday = new Date(Date.now()-2*86400000).toISOString().slice(0,10);
+      const news = await finnhub(`/company-news?symbol=${ticker}&from=${yesterday}&to=${today}`);
+      if (news && news.length > 0) newsDigest.push({ ticker, headline:news[0].headline, source:news[0].source });
+    } catch(e) {}
+    await sleep(1100);
+  }
+
+  // ── 6. ANALYST ─────────────────────────────────────────────
+  setProgress(72, 'Fetching analyst data…');
+  const analystMap = {};
+  for (const ticker of topTickers.slice(0, quickMode ? 5 : 8)) {
+    try {
+      const rec = await finnhub(`/stock/recommendation?symbol=${ticker}`);
+      if (rec && rec.length > 0) {
+        const l = rec[0];
+        analystMap[ticker] = { buy:l.buy, hold:l.hold, sell:l.sell, strongBuy:l.strongBuy, strongSell:l.strongSell };
+      }
+    } catch(e) {}
+    await sleep(1100);
+  }
+
+  // ── 7. PRICE TARGETS ──────────────────────────────────────
+  setProgress(78, 'Fetching price targets…');
+  const targetMap = {};
+  for (const ticker of topTickers.slice(0, quickMode ? 5 : 8)) {
+    try {
+      const pt = await finnhub(`/stock/price-target?symbol=${ticker}`);
+      if (pt && pt.targetMean) targetMap[ticker] = { mean: pt.targetMean, high: pt.targetHigh, low: pt.targetLow };
+    } catch(e) {}
+    await sleep(1100);
+  }
+
+  // ── 8. COMPUTE ─────────────────────────────────────────────
+  setProgress(85, 'Computing analysis…');
+  const valid = quoteData.filter(q => q.pct != null && q.theme !== 'Benchmark');
+  const sorted = [...valid].sort((a,b) => b.pct - a.pct);
+  const gainers   = sorted.slice(0, 5);
+
+  const sectorMap = {};
+  valid.forEach(q => {
+    if (!sectorMap[q.theme]) sectorMap[q.theme] = { sum:0, count:0 };
+    sectorMap[q.theme].sum   += q.pct;
+    sectorMap[q.theme].count += 1;
+  });
+  const sectors = Object.entries(sectorMap)
+    .map(([name,v]) => ({ name, avg: v.sum/v.count }))
+    .sort((a,b) => b.avg - a.avg);
+
+  const avgPct    = valid.reduce((s,q) => s+q.pct, 0) / (valid.length||1);
+  const gainCount = valid.filter(q => q.pct > 0).length;
+  const lossCount = valid.filter(q => q.pct < 0).length;
+  const spy = quoteData.find(q => q.ticker === 'SPY');
+  const qqq = quoteData.find(q => q.ticker === 'QQQ');
+
+  // Alerts
+  const alerts = [];
+  valid.forEach(q => {
+    const r = rangeMap[q.ticker] || {};
+    const pt = targetMap[q.ticker];
+    if (Math.abs(q.pct) >= ALERT_THRESHOLD) {
+      alerts.push({ ticker:q.ticker, pct:q.pct,
+        reason:`${q.pct>=0?'+':''}${q.pct.toFixed(1)}% daily move` });
+    } else if (r.high52 && q.price && (r.high52-q.price)/r.high52*100 <= NEAR_RANGE_PCT) {
+      alerts.push({ ticker:q.ticker, pct:q.pct,
+        reason:`Within ${NEAR_RANGE_PCT}% of 52w high ($${r.high52.toFixed(2)})` });
+    } else if (r.low52 && q.price && (q.price-r.low52)/r.low52*100 <= NEAR_RANGE_PCT) {
+      alerts.push({ ticker:q.ticker, pct:q.pct,
+        reason:`Within ${NEAR_RANGE_PCT}% of 52w low ($${r.low52.toFixed(2)})` });
+    }
+    if (pt && q.price && (pt.mean - q.price)/q.price*100 <= 3) {
+      alerts.push({ ticker:q.ticker, pct:q.pct,
+        reason:`Near analyst price target ($${pt.mean.toFixed(2)} mean target)` });
+    }
+  });
+
+  // Build prompt strings
+  const holdingsSummary = valid
+    .map(q => {
+      const pt = targetMap[q.ticker];
+      const ptStr = pt ? ` | target $${pt.mean.toFixed(0)}` : '';
+      return `${q.ticker} (${q.theme}): $${q.price?.toFixed(2)}, ${q.pct>=0?'+':''}${q.pct?.toFixed(2)}%${ptStr}`;
+    }).join('\n');
+  const earningsList    = Object.entries(earningsMap).map(([t,d]) => `${t}: ${d}`).join(', ') || 'none found';
+  const analystSummary  = Object.entries(analystMap)
+    .map(([t,v]) => {
+      const pt = targetMap[t];
+      const ptStr = pt ? ` | target $${pt.mean.toFixed(0)}` : '';
+      return `${t}: ${v.strongBuy+v.buy} buy / ${v.hold} hold / ${v.sell+v.strongSell} sell${ptStr}`;
+    }).join('\n') || 'unavailable';
+  const newsSummary     = newsDigest.map(n => `${n.ticker}: ${n.headline}`).join('\n') || 'none';
+  const alertSummary    = alerts.length ? alerts.map(a => `${a.ticker}: ${a.reason}`).join('\n') : 'none';
+  const insiderSummary  = insiderData.length
+    ? insiderData.map(i => `${i.ticker}: ${i.name} ${i.type} ${i.shares.toLocaleString()} shares on ${i.date}`).join('\n')
+    : 'none';
+
+  // ── 9. RENDER REPORT ───────────────────────────────────────
+  setProgress(90, 'Generating AI narrative…');
+  const ra = document.getElementById('report-area');
+  progArea.style.display = 'none';
+  ra.style.display = 'block';
+
+  const fmt  = (n) => n==null ? '<span class="na">n/a</span>'
+    : `<span class="${n>=0?'up':'dn'}">${n>=0?'+':''}${n.toFixed(2)}%</span>`;
+  const fmtP = n => n==null ? '<span class="na">n/a</span>' : `$${n.toFixed(2)}`;
+  const fmtC = n => n==null ? '<span class="na">n/a</span>'
+    : `<span class="${n>=0?'up':'dn'}">${n>=0?'+':'-'}$${Math.abs(n).toFixed(2)}</span>`;
+
+  const notes = loadNotes();
+  const today = new Date().toLocaleDateString('en-US',
+    { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  const scoreHTML = `
+    <div class="scorecard">
+      <div class="score-card">
+        <div class="sc-label">Portfolio Avg</div>
+        <div class="sc-value ${avgPct>=0?'up':'dn'}">${avgPct>=0?'+':''}${avgPct.toFixed(2)}%</div>
+        <div class="sc-sub">${gainCount} up · ${lossCount} down</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">SPY</div>
+        <div class="sc-value">${fmt(spy?.pct??null)}</div>
+        <div class="sc-sub">Benchmark</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">QQQ</div>
+        <div class="sc-value">${fmt(qqq?.pct??null)}</div>
+        <div class="sc-sub">Benchmark</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">Top Mover</div>
+        <div class="sc-value" style="font-size:1.1rem;">${gainers[0]?.ticker||'—'}</div>
+        <div class="sc-sub">${gainers[0] ? fmt(gainers[0].pct) : '—'}</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">Alerts</div>
+        <div class="sc-value" style="color:${alerts.length?'var(--yellow)':'var(--green)'}">${alerts.length}</div>
+        <div class="sc-sub">${alerts.length?'Flags raised':'All clear'}</div>
+      </div>
+      <div class="score-card">
+        <div class="sc-label">Insider Signals</div>
+        <div class="sc-value" style="font-size:1.1rem;">${insiderData.length}</div>
+        <div class="sc-sub">${insiderData.filter(i=>i.type==='BUY').length} buy · ${insiderData.filter(i=>i.type==='SELL').length} sell</div>
+      </div>
+    </div>`;
+
+  const alertHTML = alerts.length ? `
+    <div id="alert-section">
+      <div class="section" style="border-color:rgba(233,69,96,0.3);">
+        <h3>⚡ Alert Flags</h3>
+        ${alerts.map(a => `
+          <div class="alert-bar">
+            <span class="ab-ticker">${a.ticker}</span>
+            <span class="ab-reason">${a.reason}</span>
+            <span class="ab-pct ${a.pct>=0?'up':'dn'}">${a.pct>=0?'+':''}${a.pct.toFixed(2)}%</span>
+          </div>`).join('')}
+      </div>
+    </div>` : '';
+
+  const warnHTML = networkFailures.length ? `
+    <div class="warn-box">
+      <strong>⚠ Network issues:</strong> <code>${networkFailures.join(' · ')}</code> — re-run to retry.
+    </div>` : '';
+
+  const maxS = Math.max(...sectors.map(s => Math.abs(s.avg)), 0.01);
+  const sectorHTML = `
+    <div class="section">
+      <h3>Sector Performance</h3>
+      ${sectors.filter(s => s.name!=='Benchmark'&&s.name!=='ETF').map(s => `
+        <div class="sector-row">
+          <span class="sector-label">${s.name}</span>
+          <div class="sector-bar-wrap">
+            <div class="sector-bar-fill" style="width:${Math.abs(s.avg)/maxS*100}%;background:${s.avg>=0?'var(--green)':'var(--red)'}"></div>
+          </div>
+          <span class="sector-pct ${s.avg>=0?'up':'dn'}">${s.avg>=0?'+':''}${s.avg.toFixed(2)}%</span>
+        </div>`).join('')}
+    </div>`;
+
+  const insiderHTML = insiderData.length ? `
+    <div class="section" id="insider-section">
+      <h3>Insider Transactions (recent)</h3>
+      ${insiderData.map(i => `
+        <div class="insider-bar">
+          <span class="ins-ticker">${i.ticker}</span>
+          <span class="ins-type ${i.type==='BUY'?'ins-buy':'ins-sell'}">${i.type}</span>
+          <span class="ins-name">${i.name}</span>
+          <span class="ins-shares">${i.shares.toLocaleString()} shares · ${i.date}</span>
+        </div>`).join('')}
+    </div>` : '';
+
+  const holdingsHTML = `
+    <div class="section">
+      <h3>Holdings${quickMode?' — Quick Mode':''}
+        <span style="font-weight:400;color:var(--dim);font-size:0.7rem;margin-left:0.5rem;">Notes auto-save</span>
+      </h3>
+      <div style="overflow-x:auto;">
+      <table class="holdings-table">
+        <thead><tr>
+          <th>Ticker</th><th>Theme</th>
+          <th class="r">Price</th><th class="r">Chg $</th><th class="r">Day %</th>
+          <th class="r hide-mobile">52w Pos</th>
+          <th class="r hide-mobile">Target</th>
+          <th class="r hide-mobile">Earnings</th>
+          <th class="r hide-mobile">Shares</th>
+          <th class="hide-mobile">Notes</th>
+        </tr></thead>
+        <tbody>
+          ${quoteData.filter(q => q.theme!=='Benchmark').map(q => {
+            const r   = rangeMap[q.ticker] || {};
+            const pt  = targetMap[q.ticker];
+            const isAlert = alerts.find(a => a.ticker === q.ticker);
+            let rangePos = null;
+            if (r.high52 && r.low52 && q.price)
+              rangePos = Math.min(100, Math.max(0, (q.price-r.low52)/(r.high52-r.low52)*100));
+            const earnDate = earningsMap[q.ticker] || '';
+            const note = notes[q.ticker] || '';
+            const ptStr = pt ? `<span style="font-size:0.72rem;color:${q.price&&pt.mean>q.price?'var(--green)':'var(--yellow)'}">$${pt.mean.toFixed(0)}</span>` : '<span class="na">—</span>';
+            return `<tr>
+              <td class="ticker-cell">${isAlert?'⚡ ':''}${q.ticker}</td>
+              <td><span class="theme-badge">${q.theme}</span></td>
+              <td class="r">${fmtP(q.price)}</td>
+              <td class="r">${fmtC(q.change)}</td>
+              <td class="r">${fmt(q.pct)}</td>
+              <td class="r hide-mobile">
+                ${rangePos!==null?`
+                  <div style="display:flex;align-items:center;gap:0.35rem;justify-content:flex-end;">
+                    <span style="font-size:0.7rem;color:var(--dim);">${rangePos.toFixed(0)}%</span>
+                    <div class="range-bar-wrap"><div class="range-bar-fill" style="width:${rangePos}%"></div></div>
+                  </div>`:'<span class="na">—</span>'}
+              </td>
+              <td class="r hide-mobile">${ptStr}</td>
+              <td class="r hide-mobile" style="font-size:0.75rem;color:${earnDate?'var(--yellow)':'var(--dim)'};">${earnDate||'—'}</td>
+              <td class="r hide-mobile" style="min-width:80px;">
+                <input type="number" min="0" step="any"
+                  style="width:72px;background:rgba(255,255,255,0.04);border:1px solid transparent;
+                         border-radius:4px;color:var(--dim);font-size:0.78rem;padding:0.18rem 0.4rem;
+                         text-align:right;font-family:monospace;transition:border-color 0.2s,color 0.2s;"
+                  placeholder="0"
+                  value="${loadShares()[q.ticker]||''}"
+                  oninput="saveShare('${q.ticker}',this.value)"
+                  onfocus="this.style.borderColor='rgba(100,255,218,0.4)';this.style.color='var(--green)'"
+                  onblur="this.style.borderColor='transparent';this.style.color='var(--dim)'"
+                >
+              </td>
+              <td class="hide-mobile note-cell">
+                <textarea class="note-input" rows="1" placeholder="add note…"
+                  oninput="saveNote('${q.ticker}',this.value)"
+                  onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+                >${note}</textarea>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+
+  const newsHTML = newsDigest.length ? `
+    <div class="section">
+      <h3>Today's News</h3>
+      ${newsDigest.map(n => `
+        <div class="news-item">
+          <div class="news-ticker">${n.ticker}</div>
+          <div><div class="news-headline">${n.headline}</div>
+          <div class="news-source">${n.source}</div></div>
+        </div>`).join('')}
+    </div>` : '';
+
+  ra.innerHTML = `
+    <div class="report-header">
+      <h2>Close-of-Market Brief${quickMode?' <span style="font-size:0.75rem;color:var(--yellow);">Quick Mode</span>':''}</h2>
+      <span class="report-date">${today}</span>
+      <div class="hdr-btns">
+        <button class="hdr-btn print-btn" onclick="window.print()">🖨 Print / PDF</button>
+        <button class="hdr-btn" onclick="location.reload()">↺ Run again</button>
+      </div>
+    </div>
+    ${warnHTML}
+    ${scoreHTML}
+    ${alertHTML}
+    ${sectorHTML}
+    ${insiderHTML}
+    <div class="section" id="ai-brief-section">
+      <h3>AI Brief</h3>
+      <div id="brief-stream"><span class="streaming-cursor"></span></div>
+    </div>
+    ${newsHTML}
+    ${holdingsHTML}
+    ${renderArchive()}
+  `;
+
+  // ── 10. STREAM CLAUDE ──────────────────────────────────────
+  const prompt = `You are a senior portfolio analyst writing a close-of-market brief for a private investor. Write 5–7 professional paragraphs in flowing prose (no bullet points). Separate paragraphs with ---. Cover:
+1. Overall portfolio tone vs SPY/QQQ benchmarks
+2. Notable movers and likely drivers
+3. Thematic observations (AI/semis, energy, healthcare, etc.)
+4. Where analyst consensus diverges from recent price action — flag any stock trading well above or below what analyst ratings/targets would suggest
+5. Stocks trading near their analyst price target ceiling (potential limited upside) or well below (potential value)
+6. Insider transaction signals and what they may indicate
+7. Upcoming earnings dates to watch
+8. A forward-looking note
+
+Portfolio avg: ${avgPct>=0?'+':''}${avgPct.toFixed(2)}% | SPY: ${spy?.pct?.toFixed(2)||'n/a'}% | QQQ: ${qqq?.pct?.toFixed(2)||'n/a'}%
+Gainers: ${gainCount} | Losers: ${lossCount}
+
+Holdings with price targets:
+${holdingsSummary}
+
+Alert flags:
+${alertSummary}
+
+Analyst consensus:
+${analystSummary}
+
+Insider transactions:
+${insiderSummary}
+
+News:
+${newsSummary}
+
+Upcoming earnings (90 days): ${earningsList}
+${networkFailures.length?`\nData unavailable for: ${networkFailures.join(', ')}`:''}
+
+Write the complete brief now.`;
+
+  const briefEl = document.getElementById('brief-stream');
+  let fullBrief = '';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        stream: true,
+        messages: [{ role:'user', content:prompt }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({}));
+      briefEl.innerHTML = `<span style="color:var(--red)">API error: ${err.error?.message||res.statusText}</span>`;
+    } else {
+      const reader = res.body.getReader(), decoder = new TextDecoder();
+      briefEl.innerHTML = '<span class="streaming-cursor"></span>';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        for (const line of decoder.decode(value).split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') continue;
+          try {
+            const ev = JSON.parse(d);
+            if (ev.type==='content_block_delta' && ev.delta?.type==='text_delta') {
+              fullBrief += ev.delta.text;
+              briefEl.innerHTML = fullBrief
+                .split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean)
+                .map(p=>`<p>${p.replace(/\n/g,'<br>')}</p>`).join('<hr>')
+                + '<span class="streaming-cursor"></span>';
+            }
+          } catch {}
+        }
+      }
+      briefEl.innerHTML = fullBrief
+        .split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean)
+        .map(p=>`<p>${p.replace(/\n/g,'<br>')}</p>`).join('<hr>');
+
+      archiveSave({ date:new Date().toISOString(), label:today,
+        brief:fullBrief, avgPct, alerts:alerts.length });
+      const archEl = document.getElementById('archive-section');
+      if (archEl) archEl.outerHTML = renderArchive();
+    }
+  } catch(e) {
+    briefEl.innerHTML = `<span style="color:var(--red)">NetworkError: ${e.message}</span>`;
+  }
+}
+
+// ── ARCHIVE RENDERER ───────────────────────────────────────────
+function renderArchive() {
+  const list = archiveLoad();
+  if (!list.length) return '';
+  return `
+    <div class="section" id="archive-section">
+      <h3>Brief Archive (${list.length} entries)</h3>
+      ${list.map((e,i) => `
+        <div class="archive-entry">
+          <div class="archive-date">
+            ${new Date(e.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+            &nbsp;·&nbsp; Avg ${e.avgPct>=0?'+':''}${e.avgPct?.toFixed(2)||'—'}%
+            ${e.alerts?`&nbsp;·&nbsp; <span style="color:var(--yellow)">⚡${e.alerts}</span>`:''}
+          </div>
+          <div class="archive-preview" id="ap-${i}">${e.brief?.slice(0,200)||''}…</div>
+          <button class="archive-expand-btn" onclick="toggleArchive(${i})">Read full brief ↓</button>
+          <div class="archive-full" id="af-${i}">
+            ${(e.brief||'').split(/\n?---\n?/).map(p=>p.trim()).filter(Boolean)
+              .map(p=>`<p style="margin-bottom:0.8em">${p}</p>`).join('')}
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+function toggleArchive(i) {
+  const full = document.getElementById(`af-${i}`);
+  const prev = document.getElementById(`ap-${i}`);
+  const btn  = full.previousElementSibling;
+  const open = full.style.display === 'block';
+  full.style.display = open ? 'none' : 'block';
+  prev.style.display = open ? '-webkit-box' : 'none';
+  btn.textContent = open ? 'Read full brief ↓' : 'Collapse ↑';
+}
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Close-of-Market Brief</title>
+<style>
+  :root {
+    --ink:    #1a1a2e;
+    --panel:  #16213e;
+    --card:   #0f3460;
+    --gold:   #e94560;
+    --accent: #533483;
+    --dim:    #8892b0;
+    --text:   #ccd6f6;
+    --green:  #64ffda;
+    --red:    #ff6b6b;
+    --yellow: #ffd166;
+    --white:  #e6f1ff;
+    --border: rgba(100,255,218,0.15);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--ink);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
   /* ── SETUP PANEL ─────────────────────────────────────────── */
   #setup-overlay {
     position: fixed; inset: 0;
