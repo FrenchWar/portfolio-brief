@@ -907,41 +907,40 @@ async function startBrief() {
   // Build watchlist section HTML
   const wlNotes = loadWatchlistNotes();
   const watchlistHTML = (function() {
-    let rows = '';
-    watchData.forEach(wd => {
-      const isOTC   = ['ATZAF'].includes(wd.ticker);
-      const noData  = wd.price === null;
-      const pctStr  = wd.pct != null ? '<span class="' + (wd.pct>=0?'up':'dn') + '">' + (wd.pct>=0?'+':'') + wd.pct.toFixed(2) + '%</span>' : '<span class="wl-na">—</span>';
-      const priceStr = wd.price != null ? '$' + wd.price.toFixed(2) : '<span class="wl-na">n/a</span>';
-      let rangePos = null;
+    var rows = '';
+    watchData.forEach(function(wd) {
+      var isOTC    = (wd.ticker === 'ATZAF');
+      var noData   = (wd.price === null);
+      var pctStr   = wd.pct != null
+        ? '<span class="' + (wd.pct >= 0 ? 'up' : 'dn') + '">' + (wd.pct >= 0 ? '+' : '') + wd.pct.toFixed(2) + '%</span>'
+        : '<span class="wl-na">n/a</span>';
+      var priceStr = wd.price != null ? '$' + wd.price.toFixed(2) : '<span class="wl-na">n/a</span>';
+      var rangePos = null;
       if (wd.high52 && wd.low52 && wd.price)
         rangePos = Math.min(100, Math.max(0, (wd.price - wd.low52) / (wd.high52 - wd.low52) * 100));
-      const rangePart = rangePos !== null
-        ? '52w: ' + rangePos.toFixed(0) + '%'
-        : '';
-      const targetPart = wd.target ? ' · target $' + wd.target.toFixed(0) : '';
-      const earnPart   = wd.earnDate ? ' · earnings ' + wd.earnDate : '';
-      const rsiPart    = wd.rsi != null ? ' · RSI ' + wd.rsi.toFixed(0) : '';
-      const sigClass   = wd.signal === 'BUY' ? 'signal-buy' : wd.signal === 'SELL' ? 'signal-sell' : 'signal-hold';
-      const note       = (wlNotes[wd.ticker] || '').replace(/"/g, '&quot;');
+      var rangePart  = rangePos !== null ? '52w: ' + rangePos.toFixed(0) + '%' : '';
+      var targetPart = wd.target   ? ' &nbsp;·&nbsp; target $' + wd.target.toFixed(0) : '';
+      var earnPart   = wd.earnDate ? ' &nbsp;·&nbsp; earnings ' + wd.earnDate          : '';
+      var rsiPart    = wd.rsi != null ? ' &nbsp;·&nbsp; RSI ' + wd.rsi.toFixed(0)     : '';
+      var sigClass   = wd.signal === 'BUY' ? 'signal-buy' : wd.signal === 'SELL' ? 'signal-sell' : 'signal-hold';
+      var note       = (wlNotes[wd.ticker] || '').replace(/"/g, '&quot;');
       rows += '<div class="wl-row" id="wl-row-' + wd.ticker + '">'
         + '<span class="wl-ticker">' + wd.ticker + (isOTC ? '<span class="wl-otc">OTC</span>' : '') + '</span>'
         + '<span class="wl-price">' + priceStr + '</span>'
         + '<span class="wl-pct">'   + pctStr   + '</span>'
-        + '<span class="wl-meta">'  + [rangePart, targetPart, earnPart, rsiPart].filter(Boolean).join('') + '</span>'
-        + '<span class="wl-signal ' + sigClass + '">' + (noData ? '—' : wd.signal) + '</span>'
-        + '<span class="wl-note"><input type="text" placeholder="thesis / notes…" value="' + note + '" data-wlticker="' + wd.ticker + '"></span>'
-        + '<button class="wl-remove" onclick="removeWatchlistTicker('' + wd.ticker + '')" title="Remove">✕</button>'
+        + '<span class="wl-meta">'  + rangePart + targetPart + earnPart + rsiPart + '</span>'
+        + '<span class="wl-signal ' + sigClass + '">' + (noData ? '--' : wd.signal) + '</span>'
+        + '<span class="wl-note"><input type="text" placeholder="thesis / notes" value="' + note + '" data-wlticker="' + wd.ticker + '"></span>'
+        + '<button class="wl-remove" data-rmticker="' + wd.ticker + '" title="Remove">x</button>'
         + '</div>';
     });
-    return '<div class="section" id="watchlist-section" style="border-color:rgba(255,214,102,0.2);">'
-      + '<h3 style="color:var(--yellow);">👁 Watchlist — ' + watchData.length + ' stocks</h3>'
-      + '<div class="watchlist-add">'
-      + '<input type="text" id="wl-add-input" placeholder="Add ticker…" onkeydown="if(event.key==='Enter')addWatchlistTicker()">'
-      + '<button onclick="addWatchlistTicker()">+ Add</button>'
-      + '</div>'
-      + rows
+    var addRow = '<div class="watchlist-add">'
+      + '<input type="text" id="wl-add-input" placeholder="Add ticker">'
+      + '<button id="wl-add-btn">+ Add</button>'
       + '</div>';
+    return '<div class="section" id="watchlist-section" style="border-color:rgba(255,214,102,0.2);">'
+      + '<h3 style="color:var(--yellow);">Watchlist (' + watchData.length + ' stocks)</h3>'
+      + addRow + rows + '</div>';
   })();
 
   ra.innerHTML = '<div class="report-header">'
@@ -964,6 +963,13 @@ async function startBrief() {
     ta.addEventListener('input', () => saveNote(ta.dataset.ticker, ta.value));
   });
 
+  var wlAddBtn = document.getElementById('wl-add-btn');
+  if (wlAddBtn) wlAddBtn.addEventListener('click', addWatchlistTicker);
+  var wlAddInput = document.getElementById('wl-add-input');
+  if (wlAddInput) wlAddInput.addEventListener('keydown', function(e){ if(e.key==='Enter') addWatchlistTicker(); });
+  document.querySelectorAll('[data-rmticker]').forEach(function(btn) {
+    btn.addEventListener('click', function() { removeWatchlistTicker(btn.dataset.rmticker); });
+  });
   document.querySelectorAll('[data-wlticker]').forEach(input => {
     input.addEventListener('input', () => saveWatchlistNote(input.dataset.wlticker, input.value));
     input.addEventListener('focus', () => { input.style.borderColor = 'rgba(255,214,102,0.4)'; input.style.color = 'var(--yellow)'; });
