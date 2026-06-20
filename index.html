@@ -399,10 +399,23 @@ function setProgress(pct, label) {
   document.getElementById('progress-label').textContent = label;
 }
 async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-async function finnhub(path) {
-  const res = await fetch('https://finnhub.io/api/v1' + path + '&token=' + finnhubKey);
-  if (!res.ok) throw new Error('Finnhub ' + res.status);
-  return res.json();
+async function finnhub(path, retries) {
+  retries = retries || 0;
+  try {
+    const res = await fetch('https://finnhub.io/api/v1' + path + '&token=' + finnhubKey);
+    if (res.status === 429) {
+      // Rate limited — wait 3 seconds and retry once
+      if (retries < 2) { await sleep(3000); return finnhub(path, retries + 1); }
+      throw new Error('Rate limited');
+    }
+    if (!res.ok) throw new Error('Finnhub ' + res.status);
+    return res.json();
+  } catch(e) {
+    if (retries < 1 && e.message !== 'Rate limited') {
+      await sleep(2000); return finnhub(path, retries + 1);
+    }
+    throw e;
+  }
 }
 
 // ── TECHNICAL ANALYSIS HELPERS ────────────────────────────────
@@ -467,19 +480,34 @@ async function startBrief() {
         ALL_HOLDINGS.filter(h => h.theme !== 'Benchmark').slice(0, QUICK_MODE_COUNT))
     : ALL_HOLDINGS;
 
-  // ── 1. QUOTES ──────────────────────────────────────────────
+  // ── 1. QUOTES (bulk fetch) ──────────────────────────────────
+  setProgress(2, 'Fetching quotes (bulk)…');
   const quoteData = [], networkFailures = [];
-  for (let i = 0; i < HOLDINGS.length; i++) {
-    const h = HOLDINGS[i];
-    setProgress(2 + Math.round((i / HOLDINGS.length) * 22), 'Quote ' + (i+1) + '/' + HOLDINGS.length + ': ' + h.ticker);
-    try {
-      const q = await finnhub('/quote?symbol=' + h.ticker);
-      quoteData.push({...h, price:q.c||null, change:q.d||null, pct:q.dp||null, high:q.h||null, low:q.l||null, prevClose:q.pc||null});
-    } catch(e) {
-      networkFailures.push(h.ticker);
-      quoteData.push({...h, price:null, change:null, pct:null, high:null, low:null, prevClose:null});
-    }
-    await sleep(1100);
+
+  // Fetch all quotes in parallel batches of 10 to respect rate limits
+  async function fetchQuoteBatch(holdings) {
+    const results = await Promise.allSettled(
+      holdings.map(h => finnhub('/quote?symbol=' + h.ticker))
+    );
+    results.forEach((result, i) => {
+      const h = holdings[i];
+      if (result.status === 'fulfilled') {
+        const q = result.value;
+        quoteData.push({...h, price:q.c||null, change:q.d||null, pct:q.dp||null, high:q.h||null, low:q.l||null, prevClose:q.pc||null});
+      } else {
+        networkFailures.push(h.ticker);
+        quoteData.push({...h, price:null, change:null, pct:null, high:null, low:null, prevClose:null});
+      }
+    });
+  }
+
+  // Split into batches of 10, with a short pause between batches
+  const batchSize = 10;
+  for (let i = 0; i < HOLDINGS.length; i += batchSize) {
+    const batch = HOLDINGS.slice(i, i + batchSize);
+    setProgress(2 + Math.round((i / HOLDINGS.length) * 20), 'Quotes batch ' + (Math.floor(i/batchSize)+1) + '/' + Math.ceil(HOLDINGS.length/batchSize));
+    await fetchQuoteBatch(batch);
+    if (i + batchSize < HOLDINGS.length) await sleep(1500); // pause between batches
   }
 
   // ── 2. PORTFOLIO WEIGHTS ───────────────────────────────────
@@ -532,7 +560,7 @@ async function startBrief() {
       const pt = await finnhub('/stock/price-target?symbol=' + t);
       if (pt && pt.targetMean) targetMap[t] = { mean: pt.targetMean, high: pt.targetHigh, low: pt.targetLow };
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
     setProgress(28 + Math.round((i / HOLDINGS.length) * 14), '52w + targets ' + (i+1) + '/' + HOLDINGS.length + ': ' + t);
   }
 
@@ -560,7 +588,7 @@ async function startBrief() {
         techMap[t] = { sma20, sma50, rsi14, signal, volRatio };
       }
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
   }
 
   // ── 5. EPS SURPRISE ────────────────────────────────────────
@@ -581,7 +609,7 @@ async function startBrief() {
         };
       }
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
   }
 
   // ── 6. INSIDER TRANSACTIONS ────────────────────────────────
@@ -599,7 +627,7 @@ async function startBrief() {
           shares: latest.share||0, date: latest.transactionDate||'' });
       }
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
   }
 
   // ── 7. EARNINGS CALENDAR ───────────────────────────────────
@@ -626,7 +654,7 @@ async function startBrief() {
       const news = await finnhub('/company-news?symbol=' + ticker + '&from=' + yesterday + '&to=' + today);
       if (news && news.length > 0) newsDigest.push({ ticker, headline: news[0].headline, source: news[0].source });
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
   }
 
   // ── 9. WATCHLIST DATA ──────────────────────────────────────
@@ -644,19 +672,19 @@ async function startBrief() {
       wd.pct    = q.dp || null;
       wd.change = q.d  || null;
     } catch(e) { watchFails.push(t); }
-    await sleep(1100);
+    await sleep(1200);
     try {
       const r = await finnhub('/stock/metric?symbol=' + t + '&metric=all');
       const m = r.metric || {};
       wd.high52 = m['52WeekHigh'] || null;
       wd.low52  = m['52WeekLow']  || null;
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
     try {
       const pt = await finnhub('/stock/price-target?symbol=' + t);
       if (pt && pt.targetMean) wd.target = pt.targetMean;
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
     try {
       const toTs2   = Math.floor(Date.now() / 1000);
       const fromTs2 = toTs2 - 80 * 24 * 3600;
@@ -669,7 +697,7 @@ async function startBrief() {
         wd.signal = technicalSignal(sma20w, sma50w, rsi14w, c.c[c.c.length - 1]);
       }
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
     try {
       const fromDate2 = new Date().toISOString().slice(0,10);
       const toDate2   = new Date(Date.now()+90*24*3600*1000).toISOString().slice(0,10);
@@ -677,7 +705,7 @@ async function startBrief() {
       const match2 = (ec2.earningsCalendar||[]).find(e => e.symbol === t);
       if (match2) wd.earnDate = match2.date;
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
     watchData.push(wd);
   }
 
@@ -692,7 +720,7 @@ async function startBrief() {
         analystMap[ticker] = { buy:l.buy, hold:l.hold, sell:l.sell, strongBuy:l.strongBuy, strongSell:l.strongSell };
       }
     } catch(e) {}
-    await sleep(1100);
+    await sleep(1300);
   }
 
   // ── 11. COMPUTE ────────────────────────────────────────────
