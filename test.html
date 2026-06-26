@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio Brief Test</title>
+<style>
+body { background:#1a1a2e; color:#ccd6f6; font-family:sans-serif; padding:2rem; }
+input { width:100%; padding:0.6rem; margin-bottom:1rem; background:#16213e; border:1px solid #64ffda33; color:#fff; border-radius:6px; font-size:0.9rem; }
+button { background:#533483; color:#fff; border:none; padding:0.8rem 2rem; border-radius:6px; cursor:pointer; font-size:1rem; }
+#status { margin-top:1rem; color:#64ffda; }
+#error  { margin-top:1rem; color:#ff6b6b; display:none; }
+</style>
+</head>
+<body>
+<h2>Portfolio Brief — Connection Test</h2>
+<label>Anthropic Key</label>
+<input type="password" id="ant-key" placeholder="sk-ant-...">
+<label>Finnhub Key</label>
+<input type="password" id="fin-key" placeholder="finnhub key">
+<button onclick="runTest()">Test Connection</button>
+<div id="error"></div>
+<div id="status"></div>
+
+<script>
+function log(msg) {
+  document.getElementById('status').innerHTML += '<br>' + msg;
+}
+function err(msg) {
+  var el = document.getElementById('error');
+  el.style.display = 'block';
+  el.innerHTML += '<br>' + msg;
+}
+
+async function runTest() {
+  var antKey = document.getElementById('ant-key').value.trim();
+  var finKey = document.getElementById('fin-key').value.trim();
+  
+  document.getElementById('status').innerHTML = '';
+  document.getElementById('error').style.display = 'none';
+  document.getElementById('error').innerHTML = '';
+
+  if (!antKey) { err('No Anthropic key'); return; }
+  if (!finKey)  { err('No Finnhub key');  return; }
+
+  log('Keys received. Testing Finnhub...');
+  
+  try {
+    var r = await fetch('https://finnhub.io/api/v1/quote?symbol=AAPL&token=' + finKey);
+    var d = await r.json();
+    if (d.c) log('Finnhub OK — AAPL: $' + d.c);
+    else err('Finnhub returned: ' + JSON.stringify(d));
+  } catch(e) { err('Finnhub error: ' + e.message); }
+
+  log('Testing Anthropic...');
+  try {
+    var res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': antKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 50,
+        messages: [{ role: 'user', content: 'Say OK' }]
+      })
+    });
+    var data = await res.json();
+    if (data.content) log('Anthropic OK — ' + data.content[0].text);
+    else err('Anthropic error: ' + JSON.stringify(data));
+  } catch(e) { err('Anthropic error: ' + e.message); }
+}
+</script>
+</body>
+</html>
