@@ -87,9 +87,10 @@
   .up { color: var(--green); } .dn { color: var(--red); } .na { color: var(--dim); }
   .range-bar-wrap { width: 70px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 99px; overflow: hidden; display: inline-block; vertical-align: middle; }
   .range-bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--green)); border-radius: 99px; }
-  .signal-buy  { color: var(--green); font-weight: 700; font-size: 0.75rem; }
-  .signal-sell { color: var(--red);   font-weight: 700; font-size: 0.75rem; }
-  .signal-hold { color: var(--yellow);font-weight: 700; font-size: 0.75rem; }
+  .signal-buy  { color: var(--green);  font-weight: 700; font-size: 0.75rem; }
+  .signal-sell { color: var(--red);    font-weight: 700; font-size: 0.75rem; }
+  .signal-hold { color: var(--yellow); font-weight: 700; font-size: 0.75rem; }
+  .signal-na   { color: var(--dim);    font-weight: 400; font-size: 0.75rem; }
 
   /* NOTES / SHARES INPUTS */
   .note-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid transparent; border-radius: 4px; color: var(--dim); font-size: 0.75rem; padding: 0.2rem 0.4rem; font-family: 'Segoe UI', system-ui, sans-serif; transition: border-color 0.2s, color 0.2s; resize: none; overflow: hidden; height: 24px; }
@@ -405,7 +406,7 @@ async function finnhub(path, retries) {
     const res = await fetch('https://finnhub.io/api/v1' + path + '&token=' + finnhubKey);
     if (res.status === 429) {
       // Rate limited — wait 3 seconds and retry once
-      if (retries < 2) { await sleep(3000); return finnhub(path, retries + 1); }
+      if (retries < 2) { await sleep(5000); return finnhub(path, retries + 1); }
       throw new Error('Rate limited');
     }
     if (!res.ok) throw new Error('Finnhub ' + res.status);
@@ -420,36 +421,121 @@ async function finnhub(path, retries) {
 
 // ── TECHNICAL ANALYSIS HELPERS ────────────────────────────────
 function calcSMA(closes, period) {
-  if (closes.length < period) return null;
-  const slice = closes.slice(-period);
-  return slice.reduce((a, b) => a + b, 0) / period;
+  if (!closes || closes.length < period) return null;
+  return closes.slice(-period).reduce((a, b) => a + b, 0) / period;
 }
+
+function calcEMA(closes, period) {
+  if (!closes || closes.length < period) return null;
+  const k = 2 / (period + 1);
+  let ema = closes.slice(0, period).reduce((a, b) => a + b, 0) / period;
+  for (let i = period; i < closes.length; i++) ema = closes[i] * k + ema * (1 - k);
+  return ema;
+}
+
 function calcRSI(closes, period) {
-  if (closes.length < period + 1) return null;
+  if (!closes || closes.length < period + 1) return null;
   const slice = closes.slice(-(period + 1));
   let gains = 0, losses = 0;
   for (let i = 1; i < slice.length; i++) {
     const d = slice[i] - slice[i - 1];
     if (d >= 0) gains += d; else losses -= d;
   }
-  const avgGain = gains / period;
-  const avgLoss = losses / period;
+  const avgGain = gains / period, avgLoss = losses / period;
   if (avgLoss === 0) return 100;
-  const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return 100 - (100 / (1 + avgGain / avgLoss));
 }
-function technicalSignal(sma20, sma50, rsi, price) {
+
+function calcMACD(closes) {
+  if (!closes || closes.length < 35) return null;
+  const ema12 = calcEMA(closes, 12);
+  const ema26 = calcEMA(closes, 26);
+  if (ema12 == null || ema26 == null) return null;
+  const macdLine = ema12 - ema26;
+  // Signal line: 9-period EMA of MACD — approximate with last 9 MACD values
+  const macdSeries = [];
+  for (let i = closes.length - 9; i <= closes.length - 1; i++) {
+    const e12 = calcEMA(closes.slice(0, i + 1), 12);
+    const e26 = calcEMA(closes.slice(0, i + 1), 26);
+    if (e12 != null && e26 != null) macdSeries.push(e12 - e26);
+  }
+  const signal = macdSeries.length >= 3
+    ? macdSeries.reduce((a, b) => a + b, 0) / macdSeries.length : null;
+  return { macd: macdLine, signal, histogram: signal != null ? macdLine - signal : null };
+}
+
+function calcBollinger(closes, period, stdDev) {
+  period  = period  || 20;
+  stdDev  = stdDev  || 2;
+  if (!closes || closes.length < period) return null;
+  const slice  = closes.slice(-period);
+  const mean   = slice.reduce((a, b) => a + b, 0) / period;
+  const variance = slice.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / period;
+  const sd     = Math.sqrt(variance);
+  const upper  = mean + stdDev * sd;
+  const lower  = mean - stdDev * sd;
+  const price  = closes[closes.length - 1];
+  const pct    = sd > 0 ? (price - lower) / (upper - lower) * 100 : 50;
+  return { upper, middle: mean, lower, pct, bandwidth: (upper - lower) / mean * 100 };
+}
+
+function calcATR(highs, lows, closes, period) {
+  period = period || 14;
+  if (!highs || highs.length < period + 1) return null;
+  const trs = [];
+  for (let i = 1; i < highs.length; i++) {
+    trs.push(Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i]  - closes[i - 1])
+    ));
+  }
+  return trs.slice(-period).reduce((a, b) => a + b, 0) / period;
+}
+
+function calcSupportResistance(highs, lows, closes) {
+  if (!highs || highs.length < 20) return null;
+  const recent = 20;
+  const rh = highs.slice(-recent), rl = lows.slice(-recent);
+  const resistance = Math.max(...rh);
+  const support    = Math.min(...rl);
+  const price      = closes[closes.length - 1];
+  const nearRes    = (resistance - price) / price * 100;
+  const nearSup    = (price - support)    / price * 100;
+  return { resistance, support, nearRes, nearSup };
+}
+
+function calcVolumeSignal(volumes) {
+  if (!volumes || volumes.length < 20) return null;
+  const avg20  = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const avg5   = volumes.slice(-5).reduce((a, b)  => a + b, 0) / 5;
+  const today  = volumes[volumes.length - 1];
+  const ratio  = avg20 > 0 ? today / avg20 : null;
+  const trend  = avg20 > 0 ? avg5 / avg20  : null;
+  return { ratio, trend, expanding: trend != null && trend > 1.1 };
+}
+
+function technicalSignal(sma20, sma50, rsi, price, macd, boll) {
   if (!sma20 || !sma50 || !rsi || !price) return 'N/A';
   let score = 0;
-  if (price > sma20) score++;
-  if (price > sma50) score++;
-  if (sma20 > sma50) score++;
-  if (rsi < 70) score++;
-  if (rsi > 30) score++;
-  if (rsi < 40) score--;
-  if (rsi > 75) score--;
-  if (score >= 4) return 'BUY';
-  if (score <= 2) return 'SELL';
+  if (price > sma20)  score++;
+  if (price > sma50)  score++;
+  if (sma20 > sma50)  score++;
+  if (rsi > 50)       score++;
+  if (rsi < 30)       score--;  // oversold — cautious
+  if (rsi > 75)       score--;  // overbought
+  if (macd && macd.histogram != null) {
+    if (macd.histogram > 0) score++;
+    else score--;
+  }
+  if (boll && boll.pct != null) {
+    if (boll.pct > 80) score--;  // near upper band — extended
+    if (boll.pct < 20) score++;  // near lower band — oversold
+  }
+  if (score >= 5)  return 'STRONG BUY';
+  if (score >= 3)  return 'BUY';
+  if (score <= -1) return 'SELL';
+  if (score <= 1)  return 'WEAK';
   return 'HOLD';
 }
 
@@ -502,12 +588,12 @@ async function startBrief() {
   }
 
   // Split into batches of 10, with a short pause between batches
-  const batchSize = 10;
+  const batchSize = 5;
   for (let i = 0; i < HOLDINGS.length; i += batchSize) {
     const batch = HOLDINGS.slice(i, i + batchSize);
     setProgress(2 + Math.round((i / HOLDINGS.length) * 20), 'Quotes batch ' + (Math.floor(i/batchSize)+1) + '/' + Math.ceil(HOLDINGS.length/batchSize));
     await fetchQuoteBatch(batch);
-    if (i + batchSize < HOLDINGS.length) await sleep(1500); // pause between batches
+    if (i + batchSize < HOLDINGS.length) await sleep(6000); // pause between batches to respect rate limit
   }
 
   // ── 2. PORTFOLIO WEIGHTS ───────────────────────────────────
@@ -534,16 +620,10 @@ async function startBrief() {
     .map(([name, val]) => ({ name, pct: totalValue > 0 ? val / totalValue * 100 : 0 }))
     .sort((a, b) => b.pct - a.pct);
 
-  // Top N by value for technical analysis
-  const topByValue = Object.entries(weightMap)
-    .filter(([t, w]) => w.value > 0)
-    .sort((a, b) => b[1].value - a[1].value)
-    .slice(0, TECH_TOP_N)
-    .map(([t]) => t);
-  const techTickers = topByValue.length > 0 ? topByValue
-    : quoteData.filter(q => q.pct != null && q.theme !== 'Benchmark')
-        .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
-        .slice(0, TECH_TOP_N).map(q => q.ticker);
+  // Technical analysis on ALL non-benchmark holdings
+  const techTickers = quoteData
+    .filter(q => q.theme !== 'Benchmark' && q.theme !== 'ETF' && q.price != null)
+    .map(q => q.ticker);
 
   // ── 3. 52-WEEK RANGES + PRICE TARGETS ─────────────────────
   setProgress(28, 'Fetching 52w ranges…');
@@ -560,35 +640,47 @@ async function startBrief() {
       const pt = await finnhub('/stock/price-target?symbol=' + t);
       if (pt && pt.targetMean) targetMap[t] = { mean: pt.targetMean, high: pt.targetHigh, low: pt.targetLow };
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
     setProgress(28 + Math.round((i / HOLDINGS.length) * 14), '52w + targets ' + (i+1) + '/' + HOLDINGS.length + ': ' + t);
   }
 
-  // ── 4. TECHNICAL ANALYSIS ──────────────────────────────────
-  setProgress(44, 'Fetching candle data for technical analysis…');
+  // ── 4. TECHNICAL ANALYSIS (full suite, all holdings) ───────────
+  setProgress(44, 'Fetching candle data…');
   const techMap = {};
-  const toTs  = Math.floor(Date.now() / 1000);
-  const fromTs = toTs - 220 * 24 * 3600;
+  const toTs   = Math.floor(Date.now() / 1000);
+  const fromTs = toTs - 200 * 24 * 3600;
   for (let i = 0; i < techTickers.length; i++) {
     const t = techTickers[i];
-    setProgress(44 + Math.round((i / techTickers.length) * 10), 'Technical: ' + t);
+    setProgress(44 + Math.round((i / techTickers.length) * 16), 'Technical ' + (i+1) + '/' + techTickers.length + ': ' + t);
     try {
       const c = await finnhub('/stock/candle?symbol=' + t + '&resolution=D&from=' + fromTs + '&to=' + toTs);
-      if (c && c.s === 'ok' && c.c && c.c.length > 50) {
+      if (c && c.s === 'ok' && c.c && c.c.length > 20) {
         const closes  = c.c;
+        const highs   = c.h;
+        const lows    = c.l;
         const volumes = c.v;
-        const sma20   = calcSMA(closes, 20);
-        const sma50   = calcSMA(closes, 50);
-        const rsi14   = calcRSI(closes, 14);
         const price   = closes[closes.length - 1];
-        const avgVol  = volumes.slice(-20).reduce((a, b) => a + b, 0) / 20;
-        const todVol  = volumes[volumes.length - 1];
-        const volRatio = avgVol > 0 ? todVol / avgVol : null;
-        const signal  = technicalSignal(sma20, sma50, rsi14, price);
-        techMap[t] = { sma20, sma50, rsi14, signal, volRatio };
+        const sma20   = calcSMA(closes, 20);
+        const sma50   = calcSMA(closes, Math.min(50, closes.length - 1));
+        const rsi14   = calcRSI(closes, 14);
+        const macd    = calcMACD(closes);
+        const boll    = calcBollinger(closes, 20, 2);
+        const atr14   = calcATR(highs, lows, closes, 14);
+        const sr      = calcSupportResistance(highs, lows, closes);
+        const volSig  = calcVolumeSignal(volumes);
+        const signal  = technicalSignal(sma20, sma50, rsi14, price, macd, boll);
+        let trend = 'Neutral';
+        if (sma20 && sma50) {
+          if (price > sma20 && sma20 > sma50) trend = 'Uptrend';
+          else if (price < sma20 && sma20 < sma50) trend = 'Downtrend';
+          else if (price > sma50) trend = 'Above 50d';
+          else trend = 'Below 50d';
+        }
+        techMap[t] = { sma20, sma50, rsi14, macd, boll, atr: atr14, sr, volSig,
+          signal, trend, volRatio: volSig ? volSig.ratio : null };
       }
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
   }
 
   // ── 5. EPS SURPRISE ────────────────────────────────────────
@@ -609,26 +701,10 @@ async function startBrief() {
         };
       }
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
   }
 
-  // ── 6. INSIDER TRANSACTIONS ────────────────────────────────
-  setProgress(64, 'Fetching insider transactions…');
-  const insiderData = [];
-  const insiderTickers = techTickers.slice(0, quickMode ? 8 : 12);
-  for (const ticker of insiderTickers) {
-    try {
-      const ins = await finnhub('/stock/insider-transactions?symbol=' + ticker);
-      const txns = (ins.data || []).filter(t => t.transactionType === 'P-Purchase' || t.transactionType === 'S-Sale');
-      if (txns.length > 0) {
-        const latest = txns[0];
-        insiderData.push({ ticker, name: latest.name||'Executive',
-          type: latest.transactionType === 'P-Purchase' ? 'BUY' : 'SELL',
-          shares: latest.share||0, date: latest.transactionDate||'' });
-      }
-    } catch(e) {}
-    await sleep(1300);
-  }
+  const insiderData = []; // Removed — insufficient free-tier data quality
 
   // ── 7. EARNINGS CALENDAR ───────────────────────────────────
   setProgress(70, 'Fetching earnings calendar…');
@@ -654,17 +730,17 @@ async function startBrief() {
       const news = await finnhub('/company-news?symbol=' + ticker + '&from=' + yesterday + '&to=' + today);
       if (news && news.length > 0) newsDigest.push({ ticker, headline: news[0].headline, source: news[0].source });
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
   }
 
   // ── 9. WATCHLIST DATA ──────────────────────────────────────
-  setProgress(78, 'Fetching watchlist data…');
+  setProgress(72, 'Fetching watchlist data…');
   const watchTickers = loadWatchlist();
   const watchData = [];
   const watchFails = [];
   for (let i = 0; i < watchTickers.length; i++) {
     const t = watchTickers[i];
-    setProgress(78 + Math.round((i / watchTickers.length) * 4), 'Watchlist: ' + t);
+    setProgress(72 + Math.round((i / watchTickers.length) * 6), 'Watchlist: ' + t);
     const wd = { ticker: t, price: null, pct: null, change: null, high52: null, low52: null, target: null, rsi: null, signal: 'N/A', earnDate: null };
     try {
       const q = await finnhub('/quote?symbol=' + t);
@@ -679,12 +755,12 @@ async function startBrief() {
       wd.high52 = m['52WeekHigh'] || null;
       wd.low52  = m['52WeekLow']  || null;
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
     try {
       const pt = await finnhub('/stock/price-target?symbol=' + t);
       if (pt && pt.targetMean) wd.target = pt.targetMean;
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
     try {
       const toTs2   = Math.floor(Date.now() / 1000);
       const fromTs2 = toTs2 - 80 * 24 * 3600;
@@ -697,7 +773,7 @@ async function startBrief() {
         wd.signal = technicalSignal(sma20w, sma50w, rsi14w, c.c[c.c.length - 1]);
       }
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
     try {
       const fromDate2 = new Date().toISOString().slice(0,10);
       const toDate2   = new Date(Date.now()+90*24*3600*1000).toISOString().slice(0,10);
@@ -705,7 +781,7 @@ async function startBrief() {
       const match2 = (ec2.earningsCalendar||[]).find(e => e.symbol === t);
       if (match2) wd.earnDate = match2.date;
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
     watchData.push(wd);
   }
 
@@ -720,7 +796,7 @@ async function startBrief() {
         analystMap[ticker] = { buy:l.buy, hold:l.hold, sell:l.sell, strongBuy:l.strongBuy, strongSell:l.strongSell };
       }
     } catch(e) {}
-    await sleep(1300);
+    await sleep(1500);
   }
 
   // ── 11. COMPUTE ────────────────────────────────────────────
@@ -781,10 +857,19 @@ async function startBrief() {
     .join('\n') || 'unavailable';
   const newsSummary    = newsDigest.map(n => n.ticker+': '+n.headline).join('\n') || 'none';
   const alertSummary   = alerts.length ? alerts.map(a => a.ticker+': '+a.reason).join('\n') : 'none';
-  const insiderSummary = insiderData.length
-    ? insiderData.map(i => i.ticker+': '+i.name+' '+i.type+' '+i.shares.toLocaleString()+' shares on '+i.date).join('\n') : 'none';
-  const techSummary = Object.entries(techMap)
-    .map(([t,v]) => t+': RSI '+v.rsi14.toFixed(0)+', SMA20 $'+v.sma20.toFixed(2)+', SMA50 $'+v.sma50.toFixed(2)+', signal '+v.signal+(v.volRatio?' vol '+v.volRatio.toFixed(1)+'x avg':'')).join('\n') || 'none';
+  const insiderSummary = 'not available';
+  const techSummary = Object.entries(techMap).map(function(entry) {
+    var t = entry[0], v = entry[1];
+    var parts = [t + ' [' + v.signal + '] ' + v.trend];
+    if (v.rsi14)  parts.push('RSI ' + v.rsi14.toFixed(0));
+    if (v.sma20 && v.sma50) parts.push('SMA20 $' + v.sma20.toFixed(2) + ' SMA50 $' + v.sma50.toFixed(2));
+    if (v.macd && v.macd.histogram != null) parts.push('MACD hist ' + (v.macd.histogram > 0 ? '+' : '') + v.macd.histogram.toFixed(2));
+    if (v.boll)   parts.push('Boll ' + v.boll.pct.toFixed(0) + '%' + (v.boll.pct > 80 ? ' EXTENDED' : v.boll.pct < 20 ? ' OVERSOLD' : ''));
+    if (v.atr)    parts.push('ATR $' + v.atr.toFixed(2));
+    if (v.sr)     parts.push('Sup $' + v.sr.support.toFixed(2) + ' Res $' + v.sr.resistance.toFixed(2) + (v.sr.nearSup < 3 ? ' NEAR-SUPPORT' : v.sr.nearRes < 3 ? ' NEAR-RESISTANCE' : ''));
+    if (v.volRatio) parts.push('Vol ' + v.volRatio.toFixed(1) + 'x' + (v.volRatio > 1.5 ? ' HIGH-VOL' : ''));
+    return parts.join(', ');
+  }).join('\n') || 'none';
   const epsSummary = Object.entries(epsMap)
     .map(([t,e]) => t+': actual $'+(e.actual||0).toFixed(2)+' vs est $'+(e.estimate||0).toFixed(2)+' ('+(e.surprisePct>=0?'+':'')+(e.surprisePct||0).toFixed(1)+'% surprise) period '+e.date).join('\n') || 'none';
 
@@ -805,6 +890,10 @@ async function startBrief() {
     + '<div class="score-card"><div class="sc-label">QQQ</div><div class="sc-value">' + (qqq&&qqq.pct!=null ? '<span class="'+(qqq.pct>=0?'up':'dn')+'">'+(qqq.pct>=0?'+':'')+qqq.pct.toFixed(2)+'%</span>' : '<span class="na">n/a</span>') + '</div><div class="sc-sub">Benchmark</div></div>'
     + '<div class="score-card"><div class="sc-label">Top Mover</div><div class="sc-value" style="font-size:1.1rem;">' + (gainers[0]?.ticker||'—') + '</div><div class="sc-sub">' + (gainers[0]&&gainers[0].pct!=null?'<span class="'+(gainers[0].pct>=0?'up':'dn')+'">'+(gainers[0].pct>=0?'+':'')+gainers[0].pct.toFixed(2)+'%</span>':'—') + '</div></div>'
     + '<div class="score-card"><div class="sc-label">Alerts</div><div class="sc-value" style="color:' + (alerts.length?'var(--yellow)':'var(--green)') + '">' + alerts.length + '</div><div class="sc-sub">' + (alerts.length?'Flags raised':'All clear') + '</div></div>'
+    + '<div class="score-card"><div class="sc-label">Tech Signals</div>'
+    + '<div class="sc-value" style="font-size:0.95rem;color:var(--green);">'
+    + Object.values(techMap).filter(function(v){return v.signal==='STRONG BUY'||v.signal==='BUY';}).length + ' BUY</div>'
+    + '<div class="sc-sub">' + Object.values(techMap).filter(function(v){return v.signal==='SELL'||v.signal==='WEAK';}).length + ' Sell/Weak</div></div>'
     + '</div>';
 
   // Alert bars
@@ -837,25 +926,93 @@ async function startBrief() {
       }).join('')
     + '</div>' : '';
 
-  // Technical analysis table
-  const techHTML = Object.keys(techMap).length ? '<div class="section"><h3>Technical Analysis — Top ' + techTickers.length + ' by Portfolio Value</h3><div style="overflow-x:auto;"><table class="holdings-table"><thead><tr><th>Ticker</th><th class="r">Price</th><th class="r">SMA 20</th><th class="r">SMA 50</th><th class="r">RSI 14</th><th class="r">Vol vs Avg</th><th class="r">Signal</th></tr></thead><tbody>'
-    + Object.entries(techMap).map(([t, v]) => {
-        const q = quoteData.find(q => q.ticker === t);
-        const price = q?.price || 0;
-        const rsiColor = v.rsi14 > 70 ? 'var(--red)' : v.rsi14 < 30 ? 'var(--green)' : 'var(--text)';
-        const sigClass = v.signal === 'BUY' ? 'signal-buy' : v.signal === 'SELL' ? 'signal-sell' : 'signal-hold';
-        return '<tr>'
-          + '<td class="ticker-cell">' + t + '</td>'
-          + '<td class="r">$' + price.toFixed(2) + '</td>'
-          + '<td class="r ' + (price > v.sma20 ? 'up' : 'dn') + '">$' + v.sma20.toFixed(2) + '</td>'
-          + '<td class="r ' + (price > v.sma50 ? 'up' : 'dn') + '">$' + v.sma50.toFixed(2) + '</td>'
-          + '<td class="r" style="color:' + rsiColor + '">' + v.rsi14.toFixed(1) + '</td>'
-          + '<td class="r ' + (v.volRatio&&v.volRatio>1.5?'up':v.volRatio&&v.volRatio<0.7?'dn':'na') + '">' + (v.volRatio ? v.volRatio.toFixed(1) + 'x' : '—') + '</td>'
-          + '<td class="r"><span class="' + sigClass + '">' + v.signal + '</span></td>'
-          + '</tr>';
-      }).join('')
-    + '</tbody></table></div></div>' : '';
+  // Technical analysis table — full indicator suite
+  const techHTML = (function() {
+    const rows = Object.entries(techMap);
+    if (!rows.length) return '';
+    let html = '<div class="section" id="tech-section">'
+      + '<h3>Technical Analysis — ' + rows.length + ' Holdings</h3>'
+      + '<div style="overflow-x:auto;"><table class="holdings-table">'
+      + '<thead><tr>'
+      + '<th>Ticker</th>'
+      + '<th class="r">Price</th>'
+      + '<th class="r">Trend</th>'
+      + '<th class="r">SMA20</th>'
+      + '<th class="r">SMA50</th>'
+      + '<th class="r">RSI</th>'
+      + '<th class="r hide-mobile">MACD</th>'
+      + '<th class="r hide-mobile">Boll%</th>'
+      + '<th class="r hide-mobile">ATR</th>'
+      + '<th class="r hide-mobile">Vol</th>'
+      + '<th class="r hide-mobile">Support</th>'
+      + '<th class="r hide-mobile">Resist</th>'
+      + '<th class="r">Signal</th>'
+      + '</tr></thead><tbody>';
 
+    // Sort by signal strength then by ticker
+    const signalOrder = {'STRONG BUY':0,'BUY':1,'HOLD':2,'WEAK':3,'SELL':4,'N/A':5};
+    rows.sort((a, b) => (signalOrder[a[1].signal]||5) - (signalOrder[b[1].signal]||5));
+
+    rows.forEach(function(entry) {
+      var t = entry[0], v = entry[1];
+      var q = quoteData.find(function(q) { return q.ticker === t; });
+      var price = q ? q.price || 0 : 0;
+      var rsiColor = v.rsi14 > 70 ? 'var(--red)' : v.rsi14 < 30 ? 'var(--green)' : 'var(--text)';
+      var sigClass = v.signal === 'STRONG BUY' ? 'signal-buy'
+        : v.signal === 'BUY'  ? 'signal-buy'
+        : v.signal === 'SELL' ? 'signal-sell'
+        : v.signal === 'WEAK' ? 'signal-sell'
+        : 'signal-hold';
+      var sigLabel = v.signal === 'STRONG BUY'
+        ? '<span class="signal-buy" style="font-size:0.7rem;">&#9650; STRONG BUY</span>'
+        : v.signal === 'BUY'  ? '<span class="signal-buy">BUY</span>'
+        : v.signal === 'SELL' ? '<span class="signal-sell">SELL</span>'
+        : v.signal === 'WEAK' ? '<span class="signal-sell">WEAK</span>'
+        : '<span class="signal-hold">HOLD</span>';
+      var trendColor = v.trend === 'Uptrend' ? 'var(--green)'
+        : v.trend === 'Downtrend' ? 'var(--red)' : 'var(--dim)';
+      var macdStr = v.macd && v.macd.histogram != null
+        ? '<span class="' + (v.macd.histogram > 0 ? 'up' : 'dn') + '">'
+          + (v.macd.histogram > 0 ? '+' : '') + v.macd.histogram.toFixed(2) + '</span>'
+        : '<span class="na">--</span>';
+      var bollStr = v.boll && v.boll.pct != null
+        ? '<span style="color:' + (v.boll.pct > 80 ? 'var(--red)' : v.boll.pct < 20 ? 'var(--green)' : 'var(--text)') + '">'
+          + v.boll.pct.toFixed(0) + '%</span>'
+        : '<span class="na">--</span>';
+      var atrStr  = v.atr ? '$' + v.atr.toFixed(2) : '<span class="na">--</span>';
+      var volStr  = v.volRatio
+        ? '<span class="' + (v.volRatio > 1.5 ? 'up' : v.volRatio < 0.7 ? 'dn' : 'na') + '">'
+          + v.volRatio.toFixed(1) + 'x</span>'
+        : '<span class="na">--</span>';
+      var supStr  = v.sr ? '$' + v.sr.support.toFixed(2)
+        + (v.sr.nearSup < 3 ? ' <span style="color:var(--yellow);font-size:0.7rem;">near</span>' : '') : '<span class="na">--</span>';
+      var resStr  = v.sr ? '$' + v.sr.resistance.toFixed(2)
+        + (v.sr.nearRes < 3 ? ' <span style="color:var(--yellow);font-size:0.7rem;">near</span>' : '') : '<span class="na">--</span>';
+      var sma20Str = v.sma20 ? '<span class="' + (price > v.sma20 ? 'up' : 'dn') + '">$' + v.sma20.toFixed(2) + '</span>' : '<span class="na">--</span>';
+      var sma50Str = v.sma50 ? '<span class="' + (price > v.sma50 ? 'up' : 'dn') + '">$' + v.sma50.toFixed(2) + '</span>' : '<span class="na">--</span>';
+      var rsiStr   = v.rsi14 ? '<span style="color:' + rsiColor + '">' + v.rsi14.toFixed(1) + '</span>' : '<span class="na">--</span>';
+
+      html += '<tr>'
+        + '<td class="ticker-cell">' + t + '</td>'
+        + '<td class="r" style="font-size:0.75rem;color:' + trendColor + '">' + (v.trend||'--') + '</td>'
+        + '<td class="r">$' + price.toFixed(2) + '</td>'
+        + '<td class="r">' + sma20Str + '</td>'
+        + '<td class="r">' + sma50Str + '</td>'
+        + '<td class="r">' + rsiStr + '</td>'
+        + '<td class="r hide-mobile">' + macdStr + '</td>'
+        + '<td class="r hide-mobile">' + bollStr + '</td>'
+        + '<td class="r hide-mobile">' + atrStr  + '</td>'
+        + '<td class="r hide-mobile">' + volStr  + '</td>'
+        + '<td class="r hide-mobile">' + supStr  + '</td>'
+        + '<td class="r hide-mobile">' + resStr  + '</td>'
+        + '<td class="r">' + sigLabel + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+    return html;
+  })();
+
+  // EPS surprises
   // EPS surprises
   const epsHTML = Object.keys(epsMap).length ? '<div class="section"><h3>Recent Earnings — EPS vs Estimate</h3>'
     + Object.entries(epsMap).map(([t, e]) => {
@@ -869,10 +1026,7 @@ async function startBrief() {
       }).join('')
     + '</div>' : '';
 
-  // Insider
-  const insiderHTML = insiderData.length ? '<div class="section" id="insider-section"><h3>Insider Transactions (recent)</h3>'
-    + insiderData.map(i => '<div class="insider-bar"><span class="ins-ticker">' + i.ticker + '</span><span class="ins-type ' + (i.type==='BUY'?'ins-buy':'ins-sell') + '">' + i.type + '</span><span class="ins-name">' + i.name + '</span><span class="ins-shares">' + i.shares.toLocaleString() + ' shares · ' + i.date + '</span></div>').join('')
-    + '</div>' : '';
+  const insiderHTML = ''; // Removed
 
   // News
   const newsHTML = newsDigest.length ? '<div class="section"><h3>Today\'s News</h3>'
@@ -1009,7 +1163,7 @@ async function startBrief() {
     + '1. MARKET OVERVIEW: Overall portfolio tone vs SPY/QQQ. How did the portfolio perform relative to benchmarks?\n'
     + '2. NOTABLE MOVERS: Top gainers and decliners and their likely drivers.\n'
     + '3. THEMATIC OBSERVATIONS: How did AI/semis, energy, healthcare, financials, and other themes perform as groups?\n'
-    + '4. TECHNICAL PICTURE: Based on RSI, SMA20/50, and signals for the top positions — which look technically strong, which look extended or oversold?\n'
+    + '4. TECHNICAL PICTURE: You have full technical data for all holdings including RSI, SMA20/50 trend, MACD histogram, Bollinger Band position, ATR (volatility), volume, and support/resistance levels. Write a substantive technical analysis paragraph covering: which stocks are in confirmed uptrends vs downtrends, which are extended (high Boll%, overbought RSI, negative MACD), which are oversold and potentially setting up, any notable support/resistance levels being approached, and volume patterns confirming or diverging from price moves. Group by theme where helpful. Be specific with ticker names and numbers.\n'
     + '5. ANALYST DIVERGENCE: Where does analyst consensus or price targets diverge from recent price action? Flag stocks trading well above or below what targets/ratings suggest.\n'
     + '6. EARNINGS QUALITY: Interpret the EPS surprise data. Which beats or misses are meaningful and why?\n'
     + '7. INSIDER SIGNALS: What do the insider transactions suggest?\n'
