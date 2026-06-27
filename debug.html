@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Firefox Debug</title>
+</head>
+<body style="background:#1a1a2e;color:#ccd6f6;font-family:monospace;padding:2rem;">
+<h2>Firefox Diagnostic</h2>
+<div id="log"></div>
+<button id="testbtn" style="margin-top:1rem;padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1rem;">Click Me</button>
+
+<script>
+var log = document.getElementById('log');
+function say(msg, color) {
+  var d = document.createElement('div');
+  d.style.color = color || '#64ffda';
+  d.style.marginBottom = '0.4rem';
+  d.textContent = msg;
+  log.appendChild(d);
+}
+
+say('Page loaded. Checking environment...');
+say('Firefox version: ' + navigator.userAgent);
+say('localStorage available: ' + (typeof localStorage !== 'undefined'));
+
+try {
+  localStorage.setItem('test', '1');
+  localStorage.removeItem('test');
+  say('localStorage read/write: OK');
+} catch(e) {
+  say('localStorage ERROR: ' + e.message, '#ff6b6b');
+}
+
+say('fetch available: ' + (typeof fetch !== 'undefined'));
+say('Promise available: ' + (typeof Promise !== 'undefined'));
+
+document.getElementById('testbtn').addEventListener('click', function() {
+  say('Button clicked! Event listener working.', '#ffd166');
+
+  say('Testing fetch to Anthropic (no key - expect 401)...');
+  fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': 'test',
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({model:'claude-sonnet-4-6', max_tokens:10, messages:[{role:'user',content:'hi'}]})
+  }).then(function(r) {
+    say('Anthropic fetch responded: HTTP ' + r.status + ' (401 = CORS OK, key just invalid)', r.status===401?'#64ffda':'#ffd166');
+  }).catch(function(e) {
+    say('Anthropic fetch BLOCKED: ' + e.message, '#ff6b6b');
+    say('This means Firefox is blocking the request - possibly Enhanced Tracking Protection', '#ff6b6b');
+  });
+});
+
+say('Script executed successfully. Click the button to test.');
+</script>
+</body>
+</html>
