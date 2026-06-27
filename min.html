@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Minimal Test</title></head>
+<body style="background:#1a1a2e;color:#ccd6f6;padding:2rem;font-family:monospace;">
+<div id="status" style="padding:1rem;background:#333;border-radius:8px;">Waiting...</div>
+<button id="btn" style="margin-top:1rem;padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:1rem;">Click Me</button>
+<script>
+window.onerror = function(msg, src, line) {
+  document.getElementById('status').textContent = 'ERROR line '+line+': '+msg;
+  document.getElementById('status').style.background = '#c00';
+  return false;
+};
+(function() {
+"use strict";
+var x = 1;
+var y = 2;
+document.addEventListener('DOMContentLoaded', function() {
+  var s = document.getElementById('status');
+  s.textContent = 'Script OK. x='+x+' y='+y;
+  s.style.background = '#006600';
+  document.getElementById('btn').addEventListener('click', function() {
+    s.textContent = 'Button clicked! Everything works.';
+  });
+});
+})();
+</script>
+</body>
+</html>
