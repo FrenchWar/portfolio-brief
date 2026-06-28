@@ -184,8 +184,68 @@ function calcRSI(a,n){if(!a||a.length<n+1)return null;var sl=a.slice(-(n+1)),g=0
 function calcMACD(a){if(!a||a.length<35)return null;var e12=calcEMA(a,12),e26=calcEMA(a,26);if(e12==null||e26==null)return null;var ml=e12-e26,ms=[],i,em12,em26,sig;for(i=a.length-9;i<a.length;i++){em12=calcEMA(a.slice(0,i+1),12);em26=calcEMA(a.slice(0,i+1),26);if(em12!=null&&em26!=null)ms.push(em12-em26);}sig=ms.length>=3?ms.reduce(function(x,y){return x+y;},0)/ms.length:null;return{macd:ml,signal:sig,hist:sig!=null?ml-sig:null};}
 function calcBoll(a){if(!a||a.length<20)return null;var sl=a.slice(-20),mean=sl.reduce(function(x,y){return x+y;},0)/20,vr=sl.reduce(function(x,y){return x+Math.pow(y-mean,2);},0)/20,sd=Math.sqrt(vr),up=mean+2*sd,lo=mean-2*sd,pr=a[a.length-1],pct=sd>0?(pr-lo)/(up-lo)*100:50;return{upper:up,lower:lo,pct:pct};}
 function calcATR(h,l,c,n){n=n||14;if(!h||h.length<n+1)return null;var trs=[],i;for(i=1;i<h.length;i++)trs.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));var sl=trs.slice(-n);return sl.reduce(function(a,b){return a+b;},0)/n;}
+function calcFib(highs, lows, closes) {
+  if (!highs || highs.length < 20) return null;
+  var recent = Math.min(highs.length, 60);
+  var rh = highs.slice(-recent), rl = lows.slice(-recent);
+  var swingHigh = rh.reduce(function(a,b){return a>b?a:b;}, rh[0]);
+  var swingLow  = rl.reduce(function(a,b){return a<b?a:b;}, rl[0]);
+  var diff = swingHigh - swingLow;
+  if (diff <= 0) return null;
+  var price = closes[closes.length - 1];
+  var levels = {
+    r236: swingLow + diff * 0.236,
+    r382: swingLow + diff * 0.382,
+    r500: swingLow + diff * 0.500,
+    r618: swingLow + diff * 0.618,
+    r786: swingLow + diff * 0.786,
+    high: swingHigh,
+    low:  swingLow
+  };
+  // Find nearest level
+  var nearest = null, nearestDist = Infinity, nearestName = '';
+  var names = ['r236','r382','r500','r618','r786','high','low'];
+  var labels = ['23.6%','38.2%','50%','61.8%','78.6%','High','Low'];
+  for (var i = 0; i < names.length; i++) {
+    var dist = Math.abs(price - levels[names[i]]);
+    if (dist < nearestDist) { nearestDist = dist; nearest = levels[names[i]]; nearestName = labels[i]; }
+  }
+  var nearPct = nearest ? (price - nearest) / nearest * 100 : null;
+  return { levels: levels, nearest: nearest, nearestName: nearestName, nearPct: nearPct, swingHigh: swingHigh, swingLow: swingLow };
+}
+
 function techSig(s20,s50,rsi,pr,macd,boll){if(!s20||!s50||!rsi||!pr)return'N/A';var sc=0;if(pr>s20)sc++;if(pr>s50)sc++;if(s20>s50)sc++;if(rsi>50)sc++;if(rsi<30)sc--;if(rsi>75)sc--;if(macd&&macd.hist!=null){if(macd.hist>0)sc++;else sc--;}if(boll&&boll.pct!=null){if(boll.pct>80)sc--;if(boll.pct<20)sc++;}if(sc>=5)return'STRONG BUY';if(sc>=3)return'BUY';if(sc<=-1)return'SELL';if(sc<=1)return'WEAK';return'HOLD';}
 
+window.exportData=function(){
+  var data={shares:loadSh(),notes:loadNt(),watchlist:loadWL(),wlnotes:loadWLN()};
+  var json=JSON.stringify(data,null,2);
+  var blob=new Blob([json],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='portfolio_data.json';
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+};
+window.importData=function(){
+  var inp=document.createElement('input');
+  inp.type='file';inp.accept='.json';
+  inp.onchange=function(e){
+    var file=e.target.files[0];if(!file)return;
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      try{
+        var data=JSON.parse(ev.target.result);
+        if(data.shares)ss(SH_K,data.shares);
+        if(data.notes)ss(NT_K,data.notes);
+        if(data.watchlist)ss(WL_K,data.watchlist);
+        if(data.wlnotes)ss(WLN_K,data.wlnotes);
+        alert('Data imported successfully. Reload the page to see your shares.');
+      }catch(err){alert('Import failed: '+err.message);}
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+};
 window.addWL=function(){var inp=document.getElementById('wl-inp');var tk=inp.value.trim().toUpperCase();if(!tk)return;var l=loadWL();if(l.indexOf(tk)<0){l.push(tk);saveWL(l);}inp.value='';alert('Added '+tk+'. Reload to see it.');};
 window.rmWL=function(tk){var l=loadWL().filter(function(x){return x!==tk;});saveWL(l);var row=document.getElementById('wlrow-'+tk);if(row)row.parentNode.removeChild(row);};
 window.toggleArch=function(i){var f=document.getElementById('af-'+i),p=document.getElementById('ap-'+i),btn=document.getElementById('ab-'+i),open=f.style.display==='block';f.style.display=open?'none':'block';p.style.display=open?'-webkit-box':'none';btn.textContent=open?'Read full brief':'Collapse';};
@@ -268,7 +328,8 @@ function main(){
             var r30=cl.length>=31?(cl[cl.length-1]-cl[cl.length-31])/cl[cl.length-31]*100:null;
             var r90=cl.length>=91?(cl[cl.length-1]-cl[cl.length-91])/cl[cl.length-91]*100:null;
             var vr=vo&&vo.length>=20?vo[vo.length-1]/(vo.slice(-20).reduce(function(a,b){return a+b;},0)/20):null;
-            techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr};
+            var fib=calcFib(hi,lo,cl);
+            techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,fib:fib,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr};
           }
         }).catch(function(){});
       }).then(function(){return slp(1500);});
@@ -396,7 +457,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var totalFmt=totalV>0?'$'+totalV.toLocaleString('en-US',{maximumFractionDigits:0}):'Enter shares to calculate';
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
-  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div><button class="rbtn" onclick="window.print()">[P] Print</button> <button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
+  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;"><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
   if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
 
   // Scorecard
@@ -439,7 +500,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   if(techKeys.length){
     var sigOrd={'STRONG BUY':0,'BUY':1,'HOLD':2,'WEAK':3,'SELL':4,'N/A':5};
     techKeys.sort(function(a,b){return(sigOrd[techMap[a].sig]||5)-(sigOrd[techMap[b].sig]||5);});
-    html+='<div class="section"><h3>Technical Analysis - Top '+techKeys.length+' Holdings</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Price</th><th class="r">Trend</th><th class="r">SMA20</th><th class="r">SMA50</th><th class="r">RSI</th><th class="r hm">MACD</th><th class="r hm">Boll%</th><th class="r hm">RS30</th><th class="r hm">RS90</th><th class="r">Signal</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Technical Analysis - Top '+techKeys.length+' Holdings</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Price</th><th class="r">Trend</th><th class="r">SMA20</th><th class="r">SMA50</th><th class="r">RSI</th><th class="r hm">MACD</th><th class="r hm">Boll%</th><th class="r hm">RS30</th><th class="r hm">RS90</th><th class="r hm">Fib Level</th><th class="r">Signal</th></tr></thead><tbody>';
     techKeys.forEach(function(t){
       var v=techMap[t],q=qdata.filter(function(q){return q.t===t;})[0],pr=q?q.price||0:0;
       var sc=v.sig==='STRONG BUY'||v.sig==='BUY'?'sig-buy':v.sig==='SELL'||v.sig==='WEAK'?'sig-sell':'sig-hold';
@@ -452,6 +513,9 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
       html+='<td class="r hm">'+(v.boll?'<span style="color:'+(v.boll.pct>80?'var(--red)':v.boll.pct<20?'var(--green)':'var(--text)')+'">'+v.boll.pct.toFixed(0)+'%</span>':'--')+'</td>';
       html+='<td class="r hm">'+(v.a30!=null?'<span class="'+(v.a30>=0?'up':'dn')+'">'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%</span>':'--')+'</td>';
       html+='<td class="r hm">'+(v.a90!=null?'<span class="'+(v.a90>=0?'up':'dn')+'">'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%</span>':'--')+'</td>';
+      var fibCell='--';
+      if(v.fib&&v.fib.nearestName){var np=v.fib.nearPct;var fc=Math.abs(np)<2?'var(--yellow)':'var(--dim)';fibCell='<span style="font-size:0.72rem;color:'+fc+'">'+v.fib.nearestName+' $'+v.fib.nearest.toFixed(2)+(Math.abs(np)<2?' (near)':'')+'</span>';}
+      html+='<td class="r hm">'+fibCell+'</td>';
       html+='<td class="r"><span class="'+sc+'">'+v.sig+'</span></td></tr>';
     });
     html+='</tbody></table></div></div>';
@@ -530,7 +594,9 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var w=wm[q.t],pt=targetMap[q.t],tm=techMap[q.t],shv=sh[q.t]||0,val=shv*(q.price||0);
     return q.t+'('+san(q.th)+'): $'+(q.price||0).toFixed(2)+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'+(shv>0?' '+shv+'sh($'+val.toLocaleString('en-US',{maximumFractionDigits:0})+')':'')+(w&&w.pct>0?' wt:'+w.pct.toFixed(1)+'%':'')+(pt?' tgt:$'+pt.mean.toFixed(0):'')+(tm?' RSI:'+tm.rsi.toFixed(0)+' '+tm.sig+' '+tm.trend:'');
   }).join('\n');
-  var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');return t+': '+p.join(', ');}).join('\n')||'none';
+  var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');
+    if(v.fib&&v.fib.nearestName)p.push('Fib:'+v.fib.nearestName+'@$'+v.fib.nearest.toFixed(2)+(Math.abs(v.fib.nearPct)<2?' NEAR-LEVEL':''));
+    return t+': '+p.join(', ');}).join('\n')||'none';
   var epsStr=Object.keys(epsMap).map(function(t){var e=epsMap[t];return t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;}).join('\n')||'none';
   var newsStr=newsDigest.map(function(n){return n.t+': '+n.hl;}).join('\n')||'none';
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
@@ -544,7 +610,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'1. MARKET OVERVIEW: Portfolio vs SPY/QQQ. Value if available.\n'
     +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers.\n'
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
-    +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90) - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold, support/resistance, SPY outperformers and laggards.\n'
+    +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
     +'5. ANALYST DIVERGENCE: Where does consensus or targets diverge from price action?\n'
     +'6. EARNINGS QUALITY: Interpret recent EPS surprises.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
