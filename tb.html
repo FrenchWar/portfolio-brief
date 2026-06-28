@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test B-storage</title></head>
+<body style="background:#1a1a2e;color:#ccd6f6;padding:2rem;font-family:monospace;">
+<div id="status" style="padding:1rem;background:#333;border-radius:8px;">Waiting...</div>
+<button id="btn" style="margin-top:1rem;padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;">Click Me</button>
+<script>
+window.onerror = function(msg,src,line){ 
+  document.getElementById('status').innerHTML='<span style="color:red">ERROR line '+line+': '+msg+'</span>'; 
+  return false; 
+};
+(function(){"use strict";
+document.addEventListener('DOMContentLoaded', function() {
+  var d = document.getElementById('js-error');
+  if (d) { d.style.display='block'; d.textContent='DOMContentLoaded fired - script ran OK'; d.style.background='#006600'; }
+});
+
+var ALL_HOLDINGS = [
+  {t:'AAPL',th:'Big Tech'},{t:'AMZN',th:'Big Tech'},{t:'ASML',th:'Semis'},
+  {t:'AVGO',th:'Semis'},{t:'BA',th:'Industrial'},{t:'BABA',th:'China Tech'},
+  {t:'BAC',th:'Financials'},{t:'BEP',th:'Clean Energy'},{t:'BEPC',th:'Clean Energy'},
+  {t:'BMY',th:'Healthcare'},{t:'CAT',th:'Industrial'},{t:'COP',th:'Energy'},
+  {t:'COWZ',th:'ETF'},{t:'CRWD',th:'Cybersecurity'},{t:'CSCO',th:'Big Tech'},
+  {t:'CVX',th:'Energy'},{t:'DAL',th:'Transport'},{t:'DASH',th:'Consumer Tech'},
+  {t:'DELL',th:'Big Tech'},{t:'FDFX',th:'Transport'},{t:'FDX',th:'Transport'},
+  {t:'GE',th:'Industrial'},{t:'GEHC',th:'Healthcare'},{t:'GEV',th:'Industrial'},
+  {t:'GM',th:'Autos'},{t:'HD',th:'Consumer'},{t:'IBIT',th:'Crypto'},
+  {t:'INTC',th:'Semis'},{t:'JNJ',th:'Healthcare'},{t:'JPM',th:'Financials'},
+  {t:'LLY',th:'Healthcare'},{t:'MOG.A',th:'Industrial'},{t:'MSFT',th:'Big Tech'},
+  {t:'NKE',th:'Consumer'},{t:'NVDA',th:'Semis'},{t:'NYT',th:'Media'},
+  {t:'PFE',th:'Healthcare'},{t:'PKX',th:'Materials'},{t:'QCOM',th:'Semis'},
+  {t:'SBGSY',th:'Industrial'},{t:'SO',th:'Utilities'},{t:'SPGI',th:'Financials'},
+  {t:'TSM',th:'Semis'},{t:'VEEV',th:'Healthcare'},{t:'VRTX',th:'Healthcare'},
+  {t:'VTRS',th:'Healthcare'},{t:'WAB',th:'Industrial'},{t:'WMT',th:'Consumer'},
+  {t:'XOM',th:'Energy'},{t:'SPY',th:'Benchmark'},{t:'QQQ',th:'Benchmark'}
+];
+
+var DEFAULT_WATCHLIST = ['NET','FIX','NFLX','COST','V','BLK','UNH','ABT','NEE','ATZAF'];
+
+// CHECKPOINT 2 - after DEFAULT_WATCHLIST
+try { document.getElementById('js-error').textContent += ' | CP2 OK'; } catch(e){}
+
+// ── STORAGE KEYS (local, not global) ───────────
+
+var KEYS_KEY    = 'hf_api_keys';
+var SHARES_KEY  = 'hf_ticker_shares';
+var NOTES_KEY   = 'hf_ticker_notes';
+var ARCH_KEY    = 'hf_portfolio_archive';
+var WL_KEY      = 'hf_watchlist';
+var WLN_KEY     = 'hf_watchlist_notes';
+
+// CHECKPOINT 3 - after storage keys
+try { document.getElementById('js-error').textContent += ' | CP3 OK'; } catch(e){}
+
+// ── APP STATE ──────────────────────────────────
+
+var antKey  = '';
+var finKey  = '';
+var qMode   = false;
+
+// CHECKPOINT 4 - after app state
+try { document.getElementById('js-error').textContent += ' | CP4 OK'; } catch(e){}
+
+// ── STORAGE HELPERS ────────────────────────────
+
+function sget(k) { try { return JSON.parse(localStorage.getItem(k)); } catch(e) { return null; } }
+function sset(k,v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} }
+
+function loadKeys() {
+  var s = sget(KEYS_KEY);
+  if (s && s.ant) { document.getElementById('ant-key').value = s.ant; document.getElementById('ant-saved').style.display='inline'; }
+  if (s && s.fin) { document.getElementById('fin-key').value = s.fin; document.getElementById('fin-saved').style.display='inline'; }
+}
+function saveKeys() { sset(KEYS_KEY, {ant: antKey, fin: finKey}); }
+function clearKeys() {
+  sset(KEYS_KEY, null);
+  document.getElementById('ant-key').value = '';
+  document.getElementById('fin-key').value = '';
+  document.getElementById('ant-saved').style.display='none';
+  document.getElementById('fin-saved').style.display='none';
+}
+
+function loadShares() { return sget(SHARES_KEY) || {}; }
+function saveShare(tk, val) {
+  var s = loadShares(); var n = parseFloat(val);
+  if (!isNaN(n) && n > 0) s[tk] = n; else delete s[tk];
+  sset(SHARES_KEY, s);
+}
+function loadNotes() { return sget(NOTES_KEY) || {}; }
+function saveNote(tk, val) {
+  var n = loadNotes();
+  if (val && val.trim()) n[tk] = val.trim(); else delete n[tk];
+  sset(NOTES_KEY, n);
+}
+function loadWL() { var w = sget(WL_KEY); return (w && w.length) ? w : DEFAULT_WATCHLIST.slice(); }
+function saveWL(list) { sset(WL_KEY, list); }
+function loadWLNotes() { return sget(WLN_KEY) || {}; }
+function saveWLNote(tk, val) {
+  var n = loadWLNotes();
+  if (val && val.trim()) n[tk] = val.trim(); else delete n[tk];
+  sset(WLN_KEY, n);
+}
+function loadArch() { return sget(ARCH_KEY) || []; }
+function saveArch(entry) {
+  var list = loadArch(); list.unshift(entry);
+  if (list.length > 30) list.length = 30;
+  sset(ARCH_KEY, list);
+}
+document.addEventListener('DOMContentLoaded', function() {
+  var s=document.getElementById('status');
+  s.textContent='Test B-storage OK - lines 14-109.';
+  s.style.background='#006600';
+  document.getElementById('btn').addEventListener('click',function(){ s.textContent='Button works!'; });
+});
+})();
+</script></body></html>
