@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>T1</title></head>
+<body style="background:#1a1a2e;color:#ccd6f6;padding:2rem;font-family:monospace;">
+<div id="status" style="padding:1rem;background:#333;border-radius:8px;">Waiting...</div>
+<button id="btn" style="margin-top:1rem;padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;">Click</button>
+<script>
+window.onerror = function(msg,src,line){
+  document.getElementById("status").innerHTML="ERROR line "+line+": "+msg;
+  document.getElementById("status").style.background="#c00";
+  return false;
+};
+(function(){"use strict";
+function loadWL(){ return []; }
+function saveWL(l){}
+function loadArch(){ return []; }
+
+// ── TECHNICAL INDICATORS ───────────────────────
+
+function calcSMA(arr, n) {
+  if (!arr || arr.length < n) return null;
+  var s = 0; for (var i = arr.length-n; i < arr.length; i++) s += arr[i];
+  return s / n;
+}
+function calcEMA(arr, n) {
+  if (!arr || arr.length < n) return null;
+  var k = 2/(n+1), ema = 0;
+  for (var i = 0; i < n; i++) ema += arr[i];
+  ema /= n;
+  for (var j = n; j < arr.length; j++) ema = arr[j]*k + ema*(1-k);
+  return ema;
+}
+function calcRSI(arr, n) {
+  if (!arr || arr.length < n+1) return null;
+  var sl = arr.slice(-(n+1)), g = 0, l = 0;
+  for (var i = 1; i < sl.length; i++) {
+    var d = sl[i]-sl[i-1];
+    if (d >= 0) g += d; else l -= d;
+  }
+  var ag = g/n, al = l/n;
+  return al === 0 ? 100 : 100-(100/(1+ag/al));
+}
+function calcMACD(arr) {
+  if (!arr || arr.length < 35) return null;
+  var e12 = calcEMA(arr, 12), e26 = calcEMA(arr, 26);
+  if (e12 == null || e26 == null) return null;
+  var ml = e12-e26, ms = [];
+  for (var i = arr.length-9; i < arr.length; i++) {
+    var em12 = calcEMA(arr.slice(0,i+1),12), em26 = calcEMA(arr.slice(0,i+1),26);
+    if (em12 != null && em26 != null) ms.push(em12-em26);
+  }
+  var sig = ms.length >= 3 ? ms.reduce(function(a,b){return a+b;},0)/ms.length : null;
+  return {macd:ml, signal:sig, hist: sig!=null ? ml-sig : null};
+}
+function calcBoll(arr) {
+  if (!arr || arr.length < 20) return null;
+  var sl = arr.slice(-20), mean = sl.reduce(function(a,b){return a+b;},0)/20;
+  var vr = sl.reduce(function(a,b){return a+Math.pow(b-mean,2);},0)/20;
+  var sd = Math.sqrt(vr), up = mean+2*sd, lo = mean-2*sd;
+document.addEventListener("DOMContentLoaded", function() {
+  var s=document.getElementById("status");
+  s.textContent="T1 OK (lines 195-237)";
+  s.style.background="#006600";
+  document.getElementById("btn").addEventListener("click",function(){ s.textContent="BUTTON WORKS!"; });
+});
+})();
+</script></body></html>
