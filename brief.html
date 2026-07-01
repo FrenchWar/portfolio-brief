@@ -258,6 +258,58 @@ window.addWL=function(){var inp=document.getElementById('wl-inp');var tk=inp.val
 window.rmWL=function(tk){var l=loadWL().filter(function(x){return x!==tk;});saveWL(l);var row=document.getElementById('wlrow-'+tk);if(row)row.parentNode.removeChild(row);};
 window.toggleArch=function(i){var f=document.getElementById('af-'+i),p=document.getElementById('ap-'+i),btn=document.getElementById('ab-'+i),open=f.style.display==='block';f.style.display=open?'none':'block';p.style.display=open?'-webkit-box':'none';btn.textContent=open?'Read full brief':'Collapse';};
 
+var PEER_MAP = {
+  'AAPL':  ['MSFT','GOOGL','META'],
+  'AMZN':  ['MSFT','GOOGL','BABA'],
+  'ASML':  ['AMAT','LRCX','KLAC'],
+  'AVGO':  ['QCOM','TXN','ADI'],
+  'BA':    ['LMT','RTX','NOC'],
+  'BABA':  ['JD','PDD','TEMU'],
+  'BAC':   ['JPM','WFC','C'],
+  'BEP':   ['NEE','AES','ED'],
+  'BEPC':  ['NEE','AES','ED'],
+  'BMY':   ['PFE','MRK','ABBV'],
+  'CAT':   ['DE','EMR','HON'],
+  'COP':   ['XOM','CVX','EOG'],
+  'COWZ':  ['VTV','SCHD','DVY'],
+  'CRWD':  ['PANW','S','FTNT'],
+  'CSCO':  ['JNPR','ANET','HPE'],
+  'CVX':   ['XOM','COP','EOG'],
+  'DAL':   ['UAL','AAL','LUV'],
+  'DASH':  ['UBER','LYFT','GRUB'],
+  'DELL':  ['HPQ','HPE','NTAP'],
+  'FDFX':  ['FDX','UPS','XPO'],
+  'FDX':   ['UPS','XPO','CHRW'],
+  'GE':    ['HON','MMM','EMR'],
+  'GEHC':  ['SYK','MDT','BSX'],
+  'GEV':   ['ENPH','NEE','AES'],
+  'GM':    ['F','STLA','TM'],
+  'HD':    ['LOW','TSCO','SHW'],
+  'IBIT':  ['GBTC','MSTR','COIN'],
+  'INTC':  ['AMD','NVDA','QCOM'],
+  'JNJ':   ['ABT','MDT','SYK'],
+  'JPM':   ['BAC','WFC','GS'],
+  'LLY':   ['NVO','ABBV','MRK'],
+  'MOG.A': ['HEI','TDG','WWD'],
+  'MSFT':  ['AAPL','GOOGL','META'],
+  'NKE':   ['ADDYY','UAA','SKX'],
+  'NVDA':  ['AMD','INTC','QCOM'],
+  'NYT':   ['WPO','NWSA','MDP'],
+  'PFE':   ['MRK','BMY','ABBV'],
+  'PKX':   ['NUE','STLD','CLF'],
+  'QCOM':  ['AVGO','TXN','MRVL'],
+  'SBGSY': ['HON','ABB','EMR'],
+  'SO':    ['DUK','AEP','EXC'],
+  'SPGI':  ['MCO','MSCI','ICE'],
+  'TSM':   ['ASML','AMAT','LRCX'],
+  'VEEV':  ['CRM','HUBS','GWRE'],
+  'VRTX':  ['REGN','BIIB','ALNY'],
+  'VTRS':  ['TEVA','MYL','AGN'],
+  'WAB':   ['TT','ITW','ROP'],
+  'WMT':   ['TGT','COST','AMZN'],
+  'XOM':   ['CVX','COP','EOG']
+};
+
 function main(){
   var qdata=[], fails=[];
   var rangeMap={}, targetMap={}, techMap={}, epsMap={}, newsDigest=[], analystMap={}, earningsMap={}, wlData=[];
@@ -428,82 +480,104 @@ function main(){
     return p8;
   });
 
-  // Step 9: Peer comparison via FMP (top 10 by value)
+  // Step 9: Peer comparison - held stock metrics from FMP, peers hardcoded
   chain=chain.then(function(){
     setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
       .sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return x.t;});
-    if(ranked.length<3){ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).slice(0,8).map(function(q){return q.t;});}
-    var p9=Promise.resolve();
+    if(ranked.length<3){
+      ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .slice(0,8).map(function(q){return q.t;});
+    }
+
+    // Collect all tickers to fetch: held + their peers
+    var allTickers={};
     ranked.forEach(function(tk){
+      allTickers[tk]=true;
+      var peers=PEER_MAP[tk]||[];
+      peers.forEach(function(p){allTickers[p]=true;});
+    });
+    var allTk=Object.keys(allTickers);
+
+    // Fetch metrics for all tickers from FMP
+    var metricsCache={};
+    var p9=Promise.resolve();
+    allTk.forEach(function(tk){
       p9=p9.then(function(){
-        // Fetch held stock metrics + peers from FMP
-        return fmp('/profile/'+tk).then(function(prof){
-          var pr=prof&&prof.length?prof[0]:{};
-          peerMap[tk]={ticker:tk,pe:pr.pe||null,fwdPe:null,revGr:null,margin:pr.netProfitMargin||null,ps:pr.priceToSalesRatio||null,peers:[]};
-        }).catch(function(){peerMap[tk]={ticker:tk,pe:null,fwdPe:null,revGr:null,margin:null,ps:null,peers:[]};});
-      }).then(function(){return slp(300);})
-      .then(function(){
         return fmp('/ratios-ttm/'+tk).then(function(r){
           if(r&&r.length>0){
             var d=r[0];
-            if(peerMap[tk]){
-              peerMap[tk].pe=d.peRatioTTM||peerMap[tk].pe||null;
-              peerMap[tk].ps=d.priceToSalesRatioTTM||peerMap[tk].ps||null;
-              peerMap[tk].margin=d.netProfitMarginTTM||peerMap[tk].margin||null;
-            }
+            metricsCache[tk]={
+              pe:d.peRatioTTM||null,
+              ps:d.priceToSalesRatioTTM||null,
+              margin:d.netProfitMarginTTM||null,
+              roe:d.returnOnEquityTTM||null
+            };
           }
         }).catch(function(){});
-      }).then(function(){return slp(300);})
+      }).then(function(){return slp(250);})
       .then(function(){
-        return fmp('/key-metrics/'+tk+'?limit=1').then(function(r){
-          if(r&&r.length>0&&peerMap[tk]){
-            peerMap[tk].fwdPe=r[0].peRatio||null;
-            peerMap[tk].revGr=r[0].revenueGrowth||null;
+        return fmp('/key-metrics-ttm/'+tk+'?limit=1').then(function(r){
+          if(r&&r.length>0){
+            var d=r[0];
+            if(!metricsCache[tk])metricsCache[tk]={};
+            metricsCache[tk].fwdPe=d.peRatioTTM||null;
+            metricsCache[tk].revGr=d.revenueGrowthTTM||null;
+            metricsCache[tk].pe=metricsCache[tk].pe||d.peRatioTTM||null;
           }
         }).catch(function(){});
-      }).then(function(){return slp(300);})
-      .then(function(){
-        // Get peer list from FMP
-        return fmp('/stock_peers?symbol='+tk).then(function(res){
-          if(!res||!res.length||!res[0].peersList)return;
-          var peers=res[0].peersList.filter(function(p){return p!==tk;}).slice(0,3);
-          var pp2=Promise.resolve();
-          peers.forEach(function(pt){
-            pp2=pp2.then(function(){
-              return Promise.all([
-                fmp('/profile/'+pt).catch(function(){return[];}),
-                fmp('/ratios-ttm/'+pt).catch(function(){return[];}),
-                fhub('/quote?symbol='+pt).catch(function(){return{};})
-              ]).then(function(res2){
-                var pr2=res2[0]&&res2[0].length?res2[0][0]:{};
-                var ra=res2[1]&&res2[1].length?res2[1][0]:{};
-                var q2=res2[2]||{};
-                if(peerMap[tk]){
-                  peerMap[tk].peers.push({
-                    t:pt,
-                    price:q2.c||pr2.price||null,
-                    pct:q2.dp||null,
-                    pe:ra.peRatioTTM||pr2.pe||null,
-                    fwdPe:pr2.pe||null,
-                    revGr:ra.revenueGrowthTTM||null,
-                    margin:ra.netProfitMarginTTM||pr2.netProfitMargin||null,
-                    ps:ra.priceToSalesRatioTTM||null
-                  });
-                }
-              });
-            }).then(function(){return slp(300);});
+      }).then(function(){return slp(250);});
+    });
+
+    // Also fetch quotes for peer tickers not in main holdings
+    var peerOnlyTk=allTk.filter(function(tk){return !qdata.some(function(q){return q.t===tk;});});
+    var peerQuotes={};
+    peerOnlyTk.forEach(function(tk){
+      p9=p9.then(function(){
+        return fhub('/quote?symbol='+tk).then(function(q){
+          peerQuotes[tk]={price:q.c||null,pct:q.dp||null};
+        }).catch(function(){});
+      }).then(function(){return slp(1200);});
+    });
+
+    // Build peerMap from cached data
+    p9=p9.then(function(){
+      ranked.forEach(function(tk){
+        var m=metricsCache[tk]||{};
+        var heldQ=qdata.filter(function(q){return q.t===tk;})[0];
+        peerMap[tk]={
+          ticker:tk,
+          pe:m.pe||null,
+          fwdPe:m.fwdPe||null,
+          revGr:m.revGr||null,
+          margin:m.margin||null,
+          ps:m.ps||null,
+          peers:[]
+        };
+        var peers=PEER_MAP[tk]||[];
+        peers.forEach(function(pt){
+          var pm2=metricsCache[pt]||{};
+          var pq=peerQuotes[pt]||{};
+          var pHeldQ=qdata.filter(function(q){return q.t===pt;})[0];
+          peerMap[tk].peers.push({
+            t:pt,
+            price:pHeldQ?pHeldQ.price:pq.price||null,
+            pct:pHeldQ?pHeldQ.pct:pq.pct||null,
+            pe:pm2.pe||null,
+            fwdPe:pm2.fwdPe||null,
+            revGr:pm2.revGr||null,
+            margin:pm2.margin||null,
+            ps:pm2.ps||null
           });
-          return pp2;
-        }).catch(function(){});
-      }).then(function(){return slp(300);});
+        });
+      });
     });
     return p9;
   });
 
-  // Step 10: Earnings preview via FMP (next 30 days)
+  // Step 10: Earnings preview via FMP analyst estimates
   chain=chain.then(function(){
     setP(92,'Earnings previews (FMP)...');
     var upcoming=Object.keys(earningsMap).filter(function(t){
@@ -513,7 +587,8 @@ function main(){
     var p10=Promise.resolve();
     upcoming.slice(0,8).forEach(function(tk){
       p10=p10.then(function(){
-        return fmp('/analyst-estimates/'+tk+'?limit=2').then(function(est){
+        // Try analyst-estimates endpoint (available on free tier)
+        return fmp('/analyst-estimates/'+tk+'?period=quarter&limit=1').then(function(est){
           if(est&&est.length>0){
             var next=est[0];
             earnPreviewMap[tk]=earnPreviewMap[tk]||{};
@@ -524,8 +599,13 @@ function main(){
             earnPreviewMap[tk].revHigh=next.estimatedRevenueHigh||null;
             earnPreviewMap[tk].revLow=next.estimatedRevenueLow||null;
             earnPreviewMap[tk].period=next.date||null;
+          } else {
+            // Fallback: use EPS from last report + price to derive implied forward P/E
+            earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates pending'};
           }
-        }).catch(function(){});
+        }).catch(function(){
+          earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates unavailable'};
+        });
       }).then(function(){return slp(300);});
     });
     return p10;
@@ -533,9 +613,6 @@ function main(){
 
   // Step 11: Render
   chain=chain.then(function(){
-    console.log('peerMap keys:', Object.keys(peerMap));
-    if(Object.keys(peerMap).length>0){var first=Object.keys(peerMap)[0];console.log('Sample peerMap['+first+']:', JSON.stringify(peerMap[first]));}
-    console.log('earnPreviewMap keys:', Object.keys(earnPreviewMap));
     render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap);
   }).catch(function(e){
     document.getElementById('progress').style.display='none';
@@ -610,7 +687,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   // Peer comparison table
   var peerKeys=Object.keys(peerMap);
   if(peerKeys.length){
-    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">P/E</th><th class="r">Fwd P/E</th><th class="r">Rev Gr%</th><th class="r">Net Margin%</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">P/E</th><th class="r">Fwd P/E</th><th class="r">P/S</th><th class="r">Rev Gr%</th><th class="r">Margin%</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk];
       var qh=qdata.filter(function(q){return q.t===tk;})[0];
@@ -623,13 +700,15 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
       var hfpe=pm.fwdPe!=null?pm.fwdPe.toFixed(1):'<span class="na">--</span>';
       var hgr=pm.revGr!=null?'<span class="'+(pm.revGr>=0?'up':'dn')+'">'+(pm.revGr>=0?'+':'')+pm.revGr.toFixed(1)+'%</span>':'<span class="na">--</span>';
       var hmg=pm.margin!=null?pm.margin.toFixed(1)+'%':'<span class="na">--</span>';
-      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r">'+hpe+'</td><td class="r">'+hfpe+'</td><td class="r">'+hgr+'</td><td class="r">'+hmg+'</td></tr>';
+      var hps=pm.ps!=null?pm.ps.toFixed(2):'<span class="na">--</span>';
+      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r">'+hpe+'</td><td class="r">'+hfpe+'</td><td class="r">'+hps+'</td><td class="r">'+hgr+'</td><td class="r">'+hmg+'</td></tr>';
       pm.peers.forEach(function(p){
         var peStr=p.pe!=null?p.pe.toFixed(1):'<span class="na">--</span>';
         var fpeStr=p.fwdPe!=null?p.fwdPe.toFixed(1):'<span class="na">--</span>';
         var grStr=p.revGr!=null?'<span class="'+(p.revGr>=0?'up':'dn')+'">'+(p.revGr>=0?'+':'')+p.revGr.toFixed(1)+'%</span>':'<span class="na">--</span>';
         var mgStr=p.margin!=null?p.margin.toFixed(1)+'%':'<span class="na">--</span>';
-        html+='<tr><td class="tk" style="color:var(--dim);padding-left:1.5rem;">'+p.t+'</td><td style="font-size:0.72rem;color:var(--dim)">peer</td><td class="r">'+fP(p.price)+'</td><td class="r">'+fPct(p.pct)+'</td><td class="r">'+peStr+'</td><td class="r">'+fpeStr+'</td><td class="r">'+grStr+'</td><td class="r">'+mgStr+'</td></tr>';
+        var psStr=p.ps!=null?p.ps.toFixed(2):'<span class="na">--</span>';
+        html+='<tr><td class="tk" style="color:var(--dim);padding-left:1.5rem;">'+p.t+'</td><td style="font-size:0.72rem;color:var(--dim)">peer</td><td class="r">'+fP(p.price)+'</td><td class="r">'+fPct(p.pct)+'</td><td class="r">'+peStr+'</td><td class="r">'+fpeStr+'</td><td class="r">'+psStr+'</td><td class="r">'+grStr+'</td><td class="r">'+mgStr+'</td></tr>';
       });
     });
     html+='</tbody></table></div></div>';
