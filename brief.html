@@ -106,6 +106,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
     <p>Keys save automatically after first use.</p>
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
+    <div class="fl"><label>FMP API Key <span class="saved" id="fmp-saved">saved</span></label><input type="password" id="fmp-key" placeholder="financialmodelingprep key" autocomplete="off"></div>
     <div class="fl"><label>Mode</label><select id="mode-sel"><option value="full">Full Brief</option><option value="quick">Quick Brief</option></select></div>
     <div id="errmsg"></div>
     <button id="genbtn">Generate Brief</button>
@@ -146,9 +147,9 @@ var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', 
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}}
-function saveKeys(a,f){ss(KEYS_K,{a:a,f:f});}
-function clearKeys(){ss(KEYS_K,null);document.getElementById('ant-key').value='';document.getElementById('fin-key').value='';document.getElementById('ant-saved').style.display='none';document.getElementById('fin-saved').style.display='none';}
+function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}if(s&&s.m){document.getElementById('fmp-key').value=s.m;document.getElementById('fmp-saved').style.display='inline';}}
+function saveKeys(a,f,m){ss(KEYS_K,{a:a,f:f,m:m});}
+function clearKeys(){ss(KEYS_K,null);document.getElementById('ant-key').value='';document.getElementById('fin-key').value='';document.getElementById('fmp-key').value='';document.getElementById('ant-saved').style.display='none';document.getElementById('fin-saved').style.display='none';document.getElementById('fmp-saved').style.display='none';}
 function loadSh(){return sg(SH_K)||{};}
 function saveSh(t,v){var s=loadSh();var n=parseFloat(v);if(!isNaN(n)&&n>0)s[t]=n;else delete s[t];ss(SH_K,s);}
 function loadNt(){return sg(NT_K)||{};}
@@ -167,7 +168,12 @@ function fP(n){return n!=null?'$'+n.toFixed(2):'<span class="na">n/a</span>';}
 function fPct(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'')+n.toFixed(2)+'%</span>';}
 function fChg(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'-')+'$'+Math.abs(n).toFixed(2)+'</span>';}
 
-var antKey='', finKey='', qMode=false;
+var antKey='', finKey='', fmpKey='', qMode=false;
+function fmp(path){
+  return fetch('https://financialmodelingprep.com/api/v3'+path+(path.indexOf('?')>=0?'&':'?')+'apikey='+fmpKey)
+    .then(function(r){if(!r.ok)throw new Error('FMP '+r.status);return r.json();});
+}
+
 function fhub(path,retries){
   retries=retries||0;
   return fetch('https://finnhub.io/api/v1'+path+'&token='+finKey)
@@ -420,9 +426,9 @@ function main(){
     return p8;
   });
 
-  // Step 9: Peer comparison (top 10 by value)
+  // Step 9: Peer comparison via FMP (top 10 by value)
   chain=chain.then(function(){
-    setP(86,'Peer comparison...');
+    setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
@@ -431,32 +437,73 @@ function main(){
     var p9=Promise.resolve();
     ranked.forEach(function(tk){
       p9=p9.then(function(){
-        return fhub('/stock/peers?symbol='+tk).then(function(peers){
-          if(!peers||!peers.length)return;
-          var top=peers.filter(function(p){return p!==tk;}).slice(0,3);
-          var pm={ticker:tk,peers:[]};
-          var pp=Promise.resolve();
-          top.forEach(function(pt){
-            pp=pp.then(function(){
-              return Promise.all([
-                fhub('/stock/metric?symbol='+pt+'&metric=all').catch(function(){return{};}),
-                fhub('/quote?symbol='+pt).catch(function(){return{};})
-              ]).then(function(res){
-                var m=(res[0].metric)||{};var q=res[1]||{};
-                pm.peers.push({t:pt,price:q.c||null,pct:q.dp||null,pe:m.peTTM||null,fwdPe:m.peForward||null,revGr:m['revenueGrowthTTMYoy']||null,margin:m.netProfitMarginTTM||null});
-              });
-            }).then(function(){return slp(1100);});
-          });
-          return pp.then(function(){peerMap[tk]=pm;});
+        // Fetch held stock metrics + peers from FMP
+        return fmp('/profile/'+tk).then(function(prof){
+          var pr=prof&&prof.length?prof[0]:{};
+          peerMap[tk]={ticker:tk,pe:pr.pe||null,fwdPe:null,revGr:null,margin:pr.netProfitMargin||null,ps:pr.priceToSalesRatio||null,peers:[]};
+        }).catch(function(){peerMap[tk]={ticker:tk,pe:null,fwdPe:null,revGr:null,margin:null,ps:null,peers:[]};});
+      }).then(function(){return slp(300);})
+      .then(function(){
+        return fmp('/ratios-ttm/'+tk).then(function(r){
+          if(r&&r.length>0){
+            var d=r[0];
+            if(peerMap[tk]){
+              peerMap[tk].pe=d.peRatioTTM||peerMap[tk].pe||null;
+              peerMap[tk].ps=d.priceToSalesRatioTTM||peerMap[tk].ps||null;
+              peerMap[tk].margin=d.netProfitMarginTTM||peerMap[tk].margin||null;
+            }
+          }
         }).catch(function(){});
-      }).then(function(){return slp(1300);});
+      }).then(function(){return slp(300);})
+      .then(function(){
+        return fmp('/key-metrics/'+tk+'?limit=1').then(function(r){
+          if(r&&r.length>0&&peerMap[tk]){
+            peerMap[tk].fwdPe=r[0].peRatio||null;
+            peerMap[tk].revGr=r[0].revenueGrowth||null;
+          }
+        }).catch(function(){});
+      }).then(function(){return slp(300);})
+      .then(function(){
+        // Get peer list from FMP
+        return fmp('/stock_peers?symbol='+tk).then(function(res){
+          if(!res||!res.length||!res[0].peersList)return;
+          var peers=res[0].peersList.filter(function(p){return p!==tk;}).slice(0,3);
+          var pp2=Promise.resolve();
+          peers.forEach(function(pt){
+            pp2=pp2.then(function(){
+              return Promise.all([
+                fmp('/profile/'+pt).catch(function(){return[];}),
+                fmp('/ratios-ttm/'+pt).catch(function(){return[];}),
+                fhub('/quote?symbol='+pt).catch(function(){return{};})
+              ]).then(function(res2){
+                var pr2=res2[0]&&res2[0].length?res2[0][0]:{};
+                var ra=res2[1]&&res2[1].length?res2[1][0]:{};
+                var q2=res2[2]||{};
+                if(peerMap[tk]){
+                  peerMap[tk].peers.push({
+                    t:pt,
+                    price:q2.c||pr2.price||null,
+                    pct:q2.dp||null,
+                    pe:ra.peRatioTTM||pr2.pe||null,
+                    fwdPe:pr2.pe||null,
+                    revGr:ra.revenueGrowthTTM||null,
+                    margin:ra.netProfitMarginTTM||pr2.netProfitMargin||null,
+                    ps:ra.priceToSalesRatioTTM||null
+                  });
+                }
+              });
+            }).then(function(){return slp(300);});
+          });
+          return pp2;
+        }).catch(function(){});
+      }).then(function(){return slp(300);});
     });
     return p9;
   });
 
-  // Step 10: Earnings preview (next 30 days)
+  // Step 10: Earnings preview via FMP (next 30 days)
   chain=chain.then(function(){
-    setP(90,'Earnings previews...');
+    setP(92,'Earnings previews (FMP)...');
     var upcoming=Object.keys(earningsMap).filter(function(t){
       var d=new Date(earningsMap[t]);var now=new Date();
       return d>now&&(d-now)<30*24*3600*1000;
@@ -464,21 +511,20 @@ function main(){
     var p10=Promise.resolve();
     upcoming.slice(0,8).forEach(function(tk){
       p10=p10.then(function(){
-        return fhub('/stock/earnings-quality?symbol='+tk+'&freq=quarterly').then(function(eq){
-          earnPreviewMap[tk]=earnPreviewMap[tk]||{};
-          if(eq&&eq.length>0){var latest=eq[0];earnPreviewMap[tk].quality={accruals:latest.accruals,quality:latest.quality};}
+        return fmp('/analyst-estimates/'+tk+'?limit=2').then(function(est){
+          if(est&&est.length>0){
+            var next=est[0];
+            earnPreviewMap[tk]=earnPreviewMap[tk]||{};
+            earnPreviewMap[tk].epsEst=next.estimatedEpsAvg||null;
+            earnPreviewMap[tk].epsHigh=next.estimatedEpsHigh||null;
+            earnPreviewMap[tk].epsLow=next.estimatedEpsLow||null;
+            earnPreviewMap[tk].revEst=next.estimatedRevenueAvg||null;
+            earnPreviewMap[tk].revHigh=next.estimatedRevenueHigh||null;
+            earnPreviewMap[tk].revLow=next.estimatedRevenueLow||null;
+            earnPreviewMap[tk].period=next.date||null;
+          }
         }).catch(function(){});
-      }).then(function(){return slp(1100);})
-      .then(function(){
-        return fhub('/stock/revenue-estimate?symbol='+tk+'&freq=quarterly').then(function(re){
-          if(re&&re.data&&re.data.length>0){var next=re.data[0];earnPreviewMap[tk].revEst=next.revenueAvg||null;earnPreviewMap[tk].revHigh=next.revenueHigh||null;earnPreviewMap[tk].revLow=next.revenueLow||null;earnPreviewMap[tk].period=next.period||null;}
-        }).catch(function(){});
-      }).then(function(){return slp(1100);})
-      .then(function(){
-        return fhub('/stock/eps-estimate?symbol='+tk+'&freq=quarterly').then(function(ee){
-          if(ee&&ee.data&&ee.data.length>0){var next=ee.data[0];earnPreviewMap[tk].epsEst=next.epsAvg||null;earnPreviewMap[tk].epsHigh=next.epsHigh||null;earnPreviewMap[tk].epsLow=next.epsLow||null;}
-        }).catch(function(){});
-      }).then(function(){return slp(1100);});
+      }).then(function(){return slp(300);});
     });
     return p10;
   });
@@ -568,7 +614,11 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
       var sh_pe=null,sh_fpe=null,sh_revgr=null,sh_margin=null;
       // Use peer data structure - we need to add held stock metrics
       // For now show peers only
-      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r na">--</td><td class="r na">--</td><td class="r na">--</td><td class="r na">--</td></tr>';
+      var hpe=pm.pe!=null?pm.pe.toFixed(1):'<span class="na">--</span>';
+      var hfpe=pm.fwdPe!=null?pm.fwdPe.toFixed(1):'<span class="na">--</span>';
+      var hgr=pm.revGr!=null?'<span class="'+(pm.revGr>=0?'up':'dn')+'">'+(pm.revGr>=0?'+':'')+pm.revGr.toFixed(1)+'%</span>':'<span class="na">--</span>';
+      var hmg=pm.margin!=null?pm.margin.toFixed(1)+'%':'<span class="na">--</span>';
+      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r">'+hpe+'</td><td class="r">'+hfpe+'</td><td class="r">'+hgr+'</td><td class="r">'+hmg+'</td></tr>';
       pm.peers.forEach(function(p){
         var peStr=p.pe!=null?p.pe.toFixed(1):'<span class="na">--</span>';
         var fpeStr=p.fwdPe!=null?p.fwdPe.toFixed(1):'<span class="na">--</span>';
@@ -763,12 +813,14 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('genbtn').addEventListener('click',function(){
     antKey=document.getElementById('ant-key').value.trim();
     finKey=document.getElementById('fin-key').value.trim();
+    fmpKey=document.getElementById('fmp-key').value.trim();
     qMode=document.getElementById('mode-sel').value==='quick';
     var err=document.getElementById('errmsg');
     if(!antKey||antKey.indexOf('sk-ant')!==0){err.textContent='Please enter a valid Anthropic API key.';err.style.display='block';return;}
     if(!finKey){err.textContent='Please enter your Finnhub API key.';err.style.display='block';return;}
+    if(!fmpKey||fmpKey.length<20){err.textContent='Please enter your FMP API key.';err.style.display='block';return;}
     err.style.display='none';
-    saveKeys(antKey,finKey);
+    saveKeys(antKey,finKey,fmpKey);
     document.getElementById('overlay').style.display='none';
     document.getElementById('progress').style.display='block';
     setP(2,'Starting...');
