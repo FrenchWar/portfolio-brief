@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>FMP Test</title></head>
+<body style="background:#1a1a2e;color:#ccd6f6;padding:2rem;font-family:monospace;">
+<h2>FMP API Test</h2>
+<input type="text" id="fmp-key" placeholder="Enter FMP API key" style="width:400px;padding:0.5rem;margin-bottom:1rem;display:block;background:#16213e;border:1px solid #64ffda33;color:#fff;">
+<button onclick="runTest()" style="padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;">Test Endpoints</button>
+<div id="results" style="margin-top:1rem;white-space:pre-wrap;font-size:0.85rem;"></div>
+<script>
+function log(msg, color) {
+  var d = document.getElementById('results');
+  var span = document.createElement('div');
+  span.style.color = color || '#64ffda';
+  span.style.marginBottom = '0.3rem';
+  span.textContent = msg;
+  d.appendChild(span);
+}
+
+async function testEndpoint(key, path) {
+  var sep = path.indexOf('?') >= 0 ? '&' : '?';
+  var url = 'https://financialmodelingprep.com/api/v3' + path + sep + 'apikey=' + key;
+  try {
+    var r = await fetch(url);
+    var data = await r.json();
+    if (!r.ok) return { error: 'HTTP ' + r.status, data: data };
+    return { ok: true, status: r.status, data: data };
+  } catch(e) {
+    return { error: e.message };
+  }
+}
+
+async function runTest() {
+  var key = document.getElementById('fmp-key').value.trim();
+  document.getElementById('results').innerHTML = '';
+  if (!key) { log('Enter your FMP key first', '#ff6b6b'); return; }
+
+  var endpoints = [
+    '/ratios-ttm/AAPL',
+    '/key-metrics-ttm/AAPL?limit=1',
+    '/key-metrics/AAPL?limit=1',
+    '/profile/AAPL',
+    '/analyst-estimates/AAPL?period=quarter&limit=1',
+    '/income-statement/AAPL?limit=1',
+    '/quote/AAPL',
+  ];
+
+  for (var i = 0; i < endpoints.length; i++) {
+    var ep = endpoints[i];
+    log('Testing: ' + ep + ' ...', '#8892b0');
+    var result = await testEndpoint(key, ep);
+    if (result.error) {
+      log('  FAIL: ' + result.error + (result.data ? ' - ' + JSON.stringify(result.data).slice(0,100) : ''), '#ff6b6b');
+    } else {
+      var data = result.data;
+      var first = Array.isArray(data) ? data[0] : data;
+      if (first && typeof first === 'object') {
+        var keys = Object.keys(first).slice(0, 8);
+        log('  OK - Keys: ' + keys.join(', '), '#64ffda');
+        // Show key values
+        keys.forEach(function(k) {
+          if (first[k] !== null && first[k] !== undefined && typeof first[k] !== 'object') {
+            log('    ' + k + ': ' + first[k], '#ccd6f6');
+          }
+        });
+      } else {
+        log('  OK but empty/unexpected: ' + JSON.stringify(data).slice(0, 100), '#ffd166');
+      }
+    }
+    await new Promise(function(r){ setTimeout(r, 300); });
+  }
+  log('\nDone.', '#64ffda');
+}
+</script>
+</body>
+</html>
