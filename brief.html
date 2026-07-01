@@ -170,8 +170,10 @@ function fChg(n){if(n==null)return'<span class="na">n/a</span>';return'<span cla
 
 var antKey='', finKey='', fmpKey='', qMode=false;
 function fmp(path){
-  return fetch('https://financialmodelingprep.com/api/v3'+path+(path.indexOf('?')>=0?'&':'?')+'apikey='+fmpKey)
-    .then(function(r){if(!r.ok)throw new Error('FMP '+r.status);return r.json();});
+  var url='https://financialmodelingprep.com/api/v3'+path+(path.indexOf('?')>=0?'&':'?')+'apikey='+fmpKey;
+  return fetch(url)
+    .then(function(r){if(!r.ok)throw new Error('FMP '+r.status+' for '+path);return r.json();})
+    .catch(function(e){console.warn('FMP error:',e.message,'path:',path);throw e;});
 }
 
 function fhub(path,retries){
@@ -531,6 +533,9 @@ function main(){
 
   // Step 11: Render
   chain=chain.then(function(){
+    console.log('peerMap keys:', Object.keys(peerMap));
+    if(Object.keys(peerMap).length>0){var first=Object.keys(peerMap)[0];console.log('Sample peerMap['+first+']:', JSON.stringify(peerMap[first]));}
+    console.log('earnPreviewMap keys:', Object.keys(earnPreviewMap));
     render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap);
   }).catch(function(e){
     document.getElementById('progress').style.display='none';
