@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>FMP Test v2</title></head>
+<body style="background:#1a1a2e;color:#ccd6f6;padding:2rem;font-family:monospace;">
+<h2>FMP API Test - New Endpoints</h2>
+<input type="text" id="fmp-key" placeholder="Enter FMP API key" style="width:400px;padding:0.5rem;margin-bottom:1rem;display:block;background:#16213e;border:1px solid #64ffda33;color:#fff;">
+<button onclick="runTest()" style="padding:0.8rem 2rem;background:#533483;color:#fff;border:none;border-radius:6px;cursor:pointer;">Test Endpoints</button>
+<div id="results" style="margin-top:1rem;white-space:pre-wrap;font-size:0.85rem;"></div>
+<script>
+function log(msg, color) {
+  var d = document.getElementById('results');
+  var span = document.createElement('div');
+  span.style.color = color || '#64ffda';
+  span.style.marginBottom = '0.3rem';
+  span.textContent = msg;
+  d.appendChild(span);
+}
+
+async function testEndpoint(url) {
+  try {
+    var r = await fetch(url);
+    var data = await r.json();
+    if (!r.ok) return { error: 'HTTP ' + r.status, data: data };
+    return { ok: true, data: data };
+  } catch(e) {
+    return { error: e.message };
+  }
+}
+
+async function runTest() {
+  var key = document.getElementById('fmp-key').value.trim();
+  document.getElementById('results').innerHTML = '';
+  if (!key) { log('Enter your FMP key first', '#ff6b6b'); return; }
+
+  var BASE4 = 'https://financialmodelingprep.com/api/v4';
+  var BASE3 = 'https://financialmodelingprep.com/api/v3';
+  var BASEST = 'https://financialmodelingprep.com/stable';
+
+  var endpoints = [
+    // New stable endpoints
+    [BASEST + '/profile?symbol=AAPL&apikey=' + key, 'stable /profile'],
+    [BASEST + '/ratios-ttm?symbol=AAPL&apikey=' + key, 'stable /ratios-ttm'],
+    [BASEST + '/key-metrics-ttm?symbol=AAPL&apikey=' + key, 'stable /key-metrics-ttm'],
+    [BASEST + '/analyst-estimates?symbol=AAPL&period=quarter&limit=1&apikey=' + key, 'stable /analyst-estimates'],
+    [BASEST + '/stock-peers?symbol=AAPL&apikey=' + key, 'stable /stock-peers'],
+    [BASEST + '/quote?symbol=AAPL&apikey=' + key, 'stable /quote'],
+    // v4 endpoints
+    [BASE4 + '/company-outlook?symbol=AAPL&apikey=' + key, 'v4 /company-outlook'],
+  ];
+
+  for (var i = 0; i < endpoints.length; i++) {
+    var ep = endpoints[i];
+    log('Testing: ' + ep[1] + ' ...', '#8892b0');
+    var result = await testEndpoint(ep[0]);
+    if (result.error) {
+      log('  FAIL: ' + result.error + (result.data ? ' - ' + JSON.stringify(result.data).slice(0,120) : ''), '#ff6b6b');
+    } else {
+      var data = result.data;
+      var first = Array.isArray(data) ? data[0] : data;
+      if (first && typeof first === 'object' && Object.keys(first).length > 0) {
+        var keys = Object.keys(first).slice(0, 10);
+        log('  OK - Keys: ' + keys.join(', '), '#64ffda');
+        keys.forEach(function(k) {
+          var v = first[k];
+          if (v !== null && v !== undefined && typeof v !== 'object') {
+            log('    ' + k + ': ' + v, '#ccd6f6');
+          }
+        });
+      } else {
+        log('  OK but empty: ' + JSON.stringify(data).slice(0, 150), '#ffd166');
+      }
+    }
+    await new Promise(function(r){ setTimeout(r, 400); });
+  }
+  log('\nDone.', '#64ffda');
+}
+</script>
+</body>
+</html>
