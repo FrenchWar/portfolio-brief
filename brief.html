@@ -413,13 +413,24 @@ function main(){
     });
   });
 
-  // Step 4: EPS
+  // Step 4: EPS - independently ranked top 20 (was piggybacking on the top-10 technical
+  // analysis pool, which capped real coverage at 8 regardless of this slice number)
   chain=chain.then(function(){
     setP(60,'Fetching earnings...');
-    var epsTk=Object.keys(techMap).filter(function(t){return t!=='SPY';}).slice(0,8);
+    var sh4=loadSh(), ranked4=[];
+    qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).forEach(function(q){
+      ranked4.push({t:q.t,v:(sh4[q.t]||0)*(q.price||0)});
+    });
+    ranked4.sort(function(a,b){return b.v-a.v;});
+    var epsTk=ranked4.filter(function(x){return x.v>0;}).slice(0,20).map(function(x){return x.t;});
+    if(epsTk.length<3){
+      epsTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,20).map(function(q){return q.t;});
+    }
     var p4=Promise.resolve();
-    epsTk.forEach(function(tk){
+    epsTk.forEach(function(tk,i){
       p4=p4.then(function(){
+        setP(60+Math.round(i/epsTk.length*4),'Earnings '+(i+1)+'/'+epsTk.length+': '+tk);
         return fhub('/stock/earnings?symbol='+tk+'&limit=1').then(function(e){if(e&&e.length>0)epsMap[tk]={date:e[0].period,actual:e[0].actual,est:e[0].estimate,surpPct:e[0].surprisePercent};}).catch(function(){});
       }).then(function(){return slp(1300);});
     });
