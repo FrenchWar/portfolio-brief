@@ -204,17 +204,18 @@ function saveArch(e){var l=loadArch();l.unshift(e);if(l.length>30)l.length=30;ss
 function loadHoldings(){
   var h=sg(HOLD_K);
   if(h&&h.length){
-    // One-time migration: existing users already have hf_holdings in localStorage,
-    // so changing DEFAULT_HOLDINGS alone would not show Visa for them.
-    // Add V once, then allow the user to remove it later without it reappearing.
-    if(!sg(HOLD_MIG_K)){
-      if(!h.some(function(x){return x.t==='V';}))h.push({t:'V',th:'Financials'});
-      ss(HOLD_MIG_K,true);
+    // Self-healing migration: if this browser already saved an older holdings list,
+    // DEFAULT_HOLDINGS is ignored. Always insert Visa if it is missing.
+    if(!h.some(function(x){return x.t==='V';})){
+      h.push({t:'V',th:'Financials'});
       saveHoldings(h);
     }
     return h;
   }
-  return DEFAULT_HOLDINGS.slice();
+  h=DEFAULT_HOLDINGS.slice();
+  if(!h.some(function(x){return x.t==='V';}))h.push({t:'V',th:'Financials'});
+  saveHoldings(h);
+  return h;
 }
 function saveHoldings(l){ss(HOLD_K,l);}
 
@@ -354,11 +355,11 @@ document.getElementById('hm-add-btn').addEventListener('click',function(){
   var err=document.getElementById('hm-err');
   var note=document.getElementById('hm-note');
   err.style.display='none';note.style.display='none';
-  var tk=tkInput.value.trim().toUpperCase();
-  var th=thInput.value.trim();
+  var tk=tkInput ? tkInput.value.trim().toUpperCase() : '';
+  var th=thInput ? thInput.value.trim() : '';
   if(!tk){err.textContent='Enter a ticker symbol.';err.style.display='block';return;}
   if(!/^[A-Z0-9.\-]{1,10}$/.test(tk)){err.textContent='That doesn\'t look like a valid ticker symbol.';err.style.display='block';return;}
-  if(!th){err.textContent='Enter or select a theme/sector for this holding.';err.style.display='block';return;}
+  if(!th) th='Financials';
   var l=loadHoldings();
   if(l.some(function(h){return h.t===tk;})){err.textContent=tk+' is already in your holdings.';err.style.display='block';return;}
   l.push({t:tk,th:th});
