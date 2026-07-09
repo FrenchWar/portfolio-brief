@@ -114,6 +114,29 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 .hm-rm{background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;padding:0 0.2rem;}
 .hm-rm:hover{color:var(--red);}
 #hm-close-btn{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0.5rem 1.1rem;font-size:0.82rem;cursor:pointer;}
+
+/* Heat Map */
+.hmap-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;}
+.hmap-cell{display:flex;align-items:center;justify-content:center;border-radius:6px;font-family:monospace;font-weight:700;color:#fff;font-size:0.7rem;cursor:default;transition:transform 0.15s;position:relative;overflow:hidden;flex-direction:column;gap:2px;}
+.hmap-cell:hover{transform:scale(1.06);z-index:10;}
+.hmap-tk{font-size:0.72rem;font-weight:800;}
+.hmap-pct{font-size:0.65rem;opacity:0.9;}
+/* Sort buttons */
+.sort-bar{display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.8rem;}
+.sort-btn{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:var(--dim);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.72rem;cursor:pointer;}
+.sort-btn.active{background:rgba(100,255,218,0.1);border-color:var(--green);color:var(--green);}
+/* Opportunity ranking */
+.opp-bar-wrap{flex:1;height:6px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;display:inline-block;vertical-align:middle;min-width:60px;}
+.opp-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;}
+/* Decision brief toggle */
+.mode-tag{display:inline-block;font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:4px;background:rgba(83,52,131,0.6);color:#c9b8ff;margin-left:0.4rem;vertical-align:middle;}
+/* What Changed */
+.chg-row{display:flex;gap:0.5rem;align-items:baseline;padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.8rem;flex-wrap:wrap;}
+.chg-row:last-child{border-bottom:none;}
+.chg-tk{font-family:monospace;font-weight:700;min-width:62px;color:var(--white);}
+.chg-item{color:var(--dim);font-size:0.75rem;}
+.chg-up{color:var(--green);} .chg-dn{color:var(--red);}
+
 @media print{#overlay,#progress,.rbtn{display:none!important;}body{background:#fff;color:#000;}.section{border:1px solid #ddd;background:#fff;}#report{display:block!important;}}
 @media(max-width:640px){.scorecard{grid-template-columns:repeat(2,1fr);}.hm{display:none;}#report{padding:1rem 0.75rem 3rem;}}
 </style>
@@ -126,7 +149,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
     <div class="fl"><label>FMP API Key <span class="saved" id="fmp-saved">saved</span></label><input type="password" id="fmp-key" placeholder="financialmodelingprep key" autocomplete="off"></div>
-    <div class="fl"><label>Mode</label><select id="mode-sel"><option value="full">Full Brief</option><option value="quick">Quick Brief</option></select></div>
+    <div class="fl"><label>Mode</label><select id="mode-sel"><option value="full">Full Brief</option><option value="quick">Quick Brief</option><option value="decision">Decision Brief</option></select></div>
     <div id="errmsg"></div>
     <button id="genbtn">Generate Brief</button>
     <button id="manage-holdings-btn" onclick="window.openHoldingsManager()">Manage Holdings</button>
@@ -732,6 +755,46 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   html+='<div class="sc"><div class="sc-label">Alerts</div><div class="sc-val" style="color:'+(alerts.length?'var(--yellow)':'var(--green)')+'">'+alerts.length+'</div><div class="sc-sub">'+(alerts.length?'Flags raised':'All clear')+'</div></div>';
   html+='</div>';
 
+  // ── WHAT CHANGED SINCE YESTERDAY ────────────────────────────────────────────
+  var arch=loadArch();
+  if(arch.length>=1){
+    var yest=arch[0];
+    var yesterdayLines=(yest.holdStr||'').split('\n');
+    var changedRows=[];
+    valid.forEach(function(q){
+      var tm=techMap[q.t];
+      var pt=targetMap[q.t];
+      // Parse yesterday's line for this ticker
+      var yLine=yesterdayLines.filter(function(l){return l.indexOf(q.t+'(')===0;})[0]||'';
+      var changes=[];
+      // Signal change
+      if(tm){
+        var ySignalM=yLine.match(/(STRONG BUY|BUY|HOLD|WEAK|SELL|N\/A)/);
+        var ySignal=ySignalM?ySignalM[1]:null;
+        if(ySignal&&ySignal!==tm.sig)changes.push({label:'Signal',from:ySignal,to:tm.sig,up:['STRONG BUY','BUY'].indexOf(tm.sig)>['STRONG BUY','BUY'].indexOf(ySignal)});
+      }
+      // Target change
+      if(pt){
+        var yTgtM=yLine.match(/tgt:\$(\d+)/);
+        var yTgt=yTgtM?parseFloat(yTgtM[1]):null;
+        if(yTgt&&Math.abs(pt.mean-yTgt)>0.5)changes.push({label:'Target',from:'$'+yTgt.toFixed(0),to:'$'+pt.mean.toFixed(0),up:pt.mean>yTgt});
+      }
+      if(changes.length)changedRows.push({t:q.t,changes:changes,pct:q.pct});
+    });
+    if(changedRows.length){
+      html+='<div class="section" style="border-color:rgba(100,255,218,0.2)"><h3>What Changed Since Yesterday</h3>';
+      changedRows.forEach(function(r){
+        html+='<div class="chg-row"><span class="chg-tk">'+r.t+'</span>';
+        r.changes.forEach(function(c){
+          html+='<span class="chg-item">'+c.label+': <span class="'+(c.up?'chg-up':'chg-dn')+'">'+c.from+' → '+c.to+'</span></span> ';
+        });
+        html+='<span class="'+(r.pct>=0?'up':'dn')+'" style="margin-left:auto;font-family:monospace;">'+(r.pct>=0?'+':'')+r.pct.toFixed(2)+'%</span>';
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+  }
+
   if(alerts.length){html+='<div class="section" style="border-color:rgba(233,69,96,0.3)"><h3>Alert Flags</h3>';alerts.forEach(function(a){html+='<div class="abar"><span class="abar-tk">'+a.t+'</span><span class="abar-r">'+a.reason+'</span><span class="abar-p '+(a.pct>=0?'up':'dn')+'">'+(a.pct>=0?'+':'')+a.pct.toFixed(2)+'%</span></div>';});html+='</div>';}
 
   var maxS=0.01;sectors.forEach(function(s){if(Math.abs(s.avg)>maxS)maxS=Math.abs(s.avg);});
@@ -750,6 +813,66 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     swItems.forEach(function(k){var over=sectorW[k]>25;html+='<div class="srow"><span class="slabel">'+k+'</span><div class="sbar-wrap"><div class="sbar-fill" style="width:'+sectorW[k]/mxW*100+'%;background:'+(over?'var(--yellow)':'var(--green)')+'"></div></div><span class="spct" style="color:'+(over?'var(--yellow)':'var(--white)')+'">'+sectorW[k].toFixed(1)+'%'+(over?' (!)':'')+'</span></div>';});
     html+='</div>';
   }
+
+  // ── PORTFOLIO HEAT MAP ──────────────────────────────────────────────────────
+  (function(){
+    var hmItems=valid.filter(function(q){return q.price!=null;}).map(function(q){
+      var w=wm[q.t]?wm[q.t].pct:0;
+      return{t:q.t,pct:q.pct,w:w};
+    }).filter(function(x){return x.w>0||x.pct!=null;});
+    // If no weights (no shares entered), size by equal weight
+    var hasWeights=hmItems.some(function(x){return x.w>0;});
+    if(!hasWeights)hmItems.forEach(function(x){x.w=1;});
+    hmItems.sort(function(a,b){return b.w-a.w;});
+    var maxW=Math.max.apply(null,hmItems.map(function(x){return x.w;}));
+    if(maxW>0&&hmItems.length){
+      html+='<div class="section"><h3>Portfolio Heat Map <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(size = position weight · color = day %)</span></h3><div class="hmap-wrap">';
+      hmItems.forEach(function(item){
+        var sz=Math.max(48,Math.round((item.w/maxW)*120));
+        var p=item.pct||0;
+        var intensity=Math.min(1,Math.abs(p)/4);
+        var bg=p>=0
+          ?'rgba('+(Math.round(30-20*intensity))+','+(Math.round(180+50*intensity))+','+(Math.round(130+80*intensity))+',0.85)'
+          :'rgba('+(Math.round(200+55*intensity))+','+(Math.round(60-40*intensity))+','+(Math.round(60-40*intensity))+',0.85)';
+        if(Math.abs(p)<0.05)bg='rgba(80,90,120,0.7)';
+        html+='<div class="hmap-cell" style="width:'+sz+'px;height:'+sz+'px;background:'+bg+'" title="'+item.t+': '+(p>=0?'+':'')+p.toFixed(2)+'%">';
+        html+='<span class="hmap-tk">'+item.t+'</span>';
+        if(sz>=60)html+='<span class="hmap-pct">'+(p>=0?'+':'')+p.toFixed(1)+'%</span>';
+        html+='</div>';
+      });
+      html+='</div></div>';
+    }
+  })();
+
+  // ── OPPORTUNITY RANKING ──────────────────────────────────────────────────────
+  (function(){
+    var oppRows=valid.filter(function(q){
+      return targetMap[q.t]&&q.price&&targetMap[q.t].mean>0;
+    }).map(function(q){
+      var pt=targetMap[q.t];
+      var upside=(pt.mean-q.price)/q.price*100;
+      var wt=wm[q.t]?wm[q.t].pct:0;
+      return{t:q.t,price:q.price,target:pt.mean,upside:upside,wt:wt,pct:q.pct};
+    }).sort(function(a,b){return b.upside-a.upside;});
+    if(oppRows.length){
+      var maxUp=Math.max.apply(null,oppRows.map(function(x){return Math.abs(x.upside);}));
+      html+='<div class="section"><h3>Opportunity Ranking <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(by analyst upside to target)</span></h3>';
+      html+='<table class="htable"><thead><tr><th>Ticker</th><th class="r">Price</th><th class="r">Target</th><th class="r">Upside</th><th>Potential</th><th class="r">Weight</th><th class="r">Day%</th></tr></thead><tbody>';
+      oppRows.forEach(function(r){
+        var barW=maxUp>0?Math.abs(r.upside)/maxUp*100:0;
+        var barColor=r.upside>=0?'var(--green)':'var(--red)';
+        html+='<tr><td class="tk">'+r.t+'</td>';
+        html+='<td class="r">$'+r.price.toFixed(2)+'</td>';
+        html+='<td class="r" style="color:var(--dim)">$'+r.target.toFixed(0)+'</td>';
+        html+='<td class="r"><span class="'+(r.upside>=0?'up':'dn')+'">'+(r.upside>=0?'+':'')+r.upside.toFixed(1)+'%</span></td>';
+        html+='<td><div class="opp-bar-wrap"><div class="opp-bar-fill" style="width:'+barW+'%;background:'+barColor+'"></div></div></td>';
+        html+='<td class="r" style="color:var(--dim)">'+(r.wt>0?r.wt.toFixed(1)+'%':'--')+'</td>';
+        html+='<td class="r">'+fPct(r.pct)+'</td>';
+        html+='</tr>';
+      });
+      html+='</tbody></table></div>';
+    }
+  })();
 
   var peerKeys=Object.keys(peerMap);
   if(peerKeys.length){
@@ -828,8 +951,26 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   }
 
   var notes=loadNt();
-  html+='<div class="section"><h3>Holdings <span style="font-size:0.7rem;color:var(--dim);font-weight:400;">Shares + notes auto-save</span></h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Theme</th><th class="r">Price</th><th class="r">Chg</th><th class="r">Day%</th><th class="r hm">52w</th><th class="r hm">Target</th><th class="r hm">Weight</th><th class="r hm">Signal</th><th class="r hm">Earnings</th><th class="r hm">Shares</th><th class="hm">Notes</th></tr></thead><tbody>';
-  qdata.filter(function(q){return q.th!=='Benchmark';}).forEach(function(q){
+  // Holdings sort state
+  var holdSort='theme'; // default
+  function sortedHoldings(by){
+    var rows=qdata.filter(function(q){return q.th!=='Benchmark';});
+    if(by==='theme')rows.sort(function(a,b){return a.th<b.th?-1:a.th>b.th?1:a.t<b.t?-1:1;});
+    else if(by==='ticker')rows.sort(function(a,b){return a.t<b.t?-1:1;});
+    else if(by==='day')rows.sort(function(a,b){return (b.pct||0)-(a.pct||0);});
+    else if(by==='weight')rows.sort(function(a,b){return ((wm[b.t]&&wm[b.t].pct)||0)-((wm[a.t]&&wm[a.t].pct)||0);});
+    else if(by==='signal'){var so={'STRONG BUY':0,'BUY':1,'HOLD':2,'WEAK':3,'SELL':4,'N/A':5};rows.sort(function(a,b){return(so[(techMap[a.t]&&techMap[a.t].sig)||'N/A']||5)-(so[(techMap[b.t]&&techMap[b.t].sig)||'N/A']||5);});}
+    else if(by==='upside')rows.sort(function(a,b){var ua=targetMap[a.t]&&a.price?(targetMap[a.t].mean-a.price)/a.price*100:-999;var ub=targetMap[b.t]&&b.price?(targetMap[b.t].mean-b.price)/b.price*100:-999;return ub-ua;});
+    else if(by==='earnings')rows.sort(function(a,b){var da=earningsMap[a.t]||'9999';var db=earningsMap[b.t]||'9999';return da<db?-1:1;});
+    return rows;
+  }
+  var sortLabels=[['theme','Theme'],['ticker','A-Z'],['day','Day %'],['weight','Weight'],['signal','Signal'],['upside','Upside'],['earnings','Earnings']];
+  html+='<div class="section"><h3>Holdings <span style="font-size:0.7rem;color:var(--dim);font-weight:400;">Shares + notes auto-save</span></h3>';
+  html+='<div class="sort-bar" id="hold-sort-bar">';
+  sortLabels.forEach(function(sl){html+='<button class="sort-btn'+(holdSort===sl[0]?' active':'')+'" data-sort="'+sl[0]+'">'+sl[1]+'</button>';});
+  html+='</div>';
+  html+='<div id="hold-table-wrap" style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Theme</th><th class="r">Price</th><th class="r">Chg</th><th class="r">Day%</th><th class="r hm">52w</th><th class="r hm">Target</th><th class="r hm">Weight</th><th class="r hm">Signal</th><th class="r hm">Earnings</th><th class="r hm">Shares</th><th class="hm">Notes</th></tr></thead><tbody>';
+  sortedHoldings(holdSort).forEach(function(q){
     var r=rangeMap[q.t]||{},pt=targetMap[q.t],tm=techMap[q.t],wt=wm[q.t];
     var earn=earningsMap[q.t]||'';
     var note=(notes[q.t]||'').replace(/"/g,'&quot;');
@@ -843,7 +984,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var sigCell=tm?'<span class="'+(tm.sig==='STRONG BUY'||tm.sig==='BUY'?'sig-buy':tm.sig==='SELL'||tm.sig==='WEAK'?'sig-sell':'sig-hold')+'">'+tm.sig+'</span>':'--';
     html+='<tr><td class="tk">'+(isAlert?'(!) ':'')+q.t+'</td><td><span class="badge">'+q.th+'</span></td><td class="r">'+fP(q.price)+'</td><td class="r">'+fChg(q.change)+'</td><td class="r">'+fPct(q.pct)+'</td><td class="r hm">'+rangeCell+'</td><td class="r hm">'+ptCell+'</td><td class="r hm">'+wtCell+'</td><td class="r hm">'+sigCell+'</td><td class="r hm" style="font-size:0.75rem;color:'+(earn?'var(--yellow)':'var(--dim)')+';">'+(earn||'--')+'</td><td class="r hm"><input type="number" class="sh-in" data-tk="'+q.t+'" min="0" step="any" placeholder="0" value="'+shv+'"></td><td class="hm"><textarea class="note-in" data-tk="'+q.t+'" rows="1" placeholder="notes...">'+note+'</textarea></td></tr>';
   });
-  html+='</tbody></table></div></div>';
+  html+='</tbody></table></div></div></div>';
 
   var wlnotes=loadWLN();
   html+='<div class="section" style="border-color:rgba(255,214,102,0.2)"><h3 style="color:var(--yellow)">Watchlist ('+loadWL().length+' stocks)</h3><div class="wl-add"><input type="text" id="wl-inp" placeholder="Add ticker..."><button onclick="addWL()">+ Add</button></div>';
@@ -867,6 +1008,41 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   ra.style.display='block';
   ra.innerHTML=html;
 
+  // Wire sort buttons
+  document.querySelectorAll('[data-sort]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      holdSort=btn.getAttribute('data-sort');
+      // Re-render just the holdings table
+      var tableWrap=document.getElementById('hold-table-wrap');
+      var sortBar=document.getElementById('hold-sort-bar');
+      if(!tableWrap||!sortBar)return;
+      // Update active button
+      sortBar.querySelectorAll('.sort-btn').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-sort')===holdSort);});
+      // Rebuild table body
+      var tbody=tableWrap.querySelector('tbody');
+      if(!tbody)return;
+      var newRows='';
+      sortedHoldings(holdSort).forEach(function(q){
+        var r=rangeMap[q.t]||{},pt=targetMap[q.t],tm=techMap[q.t],wt=wm[q.t];
+        var earn=earningsMap[q.t]||'';
+        var note=(loadNt()[q.t]||'').replace(/"/g,'&quot;');
+        var shv=loadSh()[q.t]||'';
+        var isAlert=alerts.some(function(a){return a.t===q.t;});
+        var rp=null;
+        if(r.hi52&&r.lo52&&q.price)rp=Math.min(100,Math.max(0,(q.price-r.lo52)/(r.hi52-r.lo52)*100));
+        var rangeCell=rp!=null?'<div style="display:flex;align-items:center;gap:0.35rem;justify-content:flex-end;"><span style="font-size:0.7rem;color:var(--dim);">'+rp.toFixed(0)+'%</span><div class="rbar-wrap"><div class="rbar-fill" style="width:'+rp+'%"></div></div></div>':'--';
+        var ptCell=pt?'<span style="color:'+(q.price&&pt.mean>q.price?'var(--green)':'var(--yellow)')+'">$'+pt.mean.toFixed(0)+'</span>':'--';
+        var wtCell=wt&&wt.pct>0?wt.pct.toFixed(1)+'%':'--';
+        var sigCell=tm?'<span class="'+(tm.sig==='STRONG BUY'||tm.sig==='BUY'?'sig-buy':tm.sig==='SELL'||tm.sig==='WEAK'?'sig-sell':'sig-hold')+'">'+tm.sig+'</span>':'--';
+        newRows+='<tr><td class="tk">'+(isAlert?'(!) ':'')+q.t+'</td><td><span class="badge">'+q.th+'</span></td><td class="r">'+fP(q.price)+'</td><td class="r">'+fChg(q.change)+'</td><td class="r">'+fPct(q.pct)+'</td><td class="r hm">'+rangeCell+'</td><td class="r hm">'+ptCell+'</td><td class="r hm">'+wtCell+'</td><td class="r hm">'+sigCell+'</td><td class="r hm" style="font-size:0.75rem;color:'+(earn?'var(--yellow)':'var(--dim)')+';">'+(earn||'--')+'</td><td class="r hm"><input type="number" class="sh-in" data-tk="'+q.t+'" min="0" step="any" placeholder="0" value="'+shv+'"></td><td class="hm"><textarea class="note-in" data-tk="'+q.t+'" rows="1" placeholder="notes...">'+note+'</textarea></td></tr>';
+      });
+      tbody.innerHTML=newRows;
+      // Re-wire new inputs
+      tableWrap.querySelectorAll('.sh-in').forEach(function(inp){var tk=inp.getAttribute('data-tk');inp.addEventListener('input',function(){saveSh(tk,inp.value);});inp.addEventListener('focus',function(){inp.style.borderColor='rgba(100,255,218,0.4)';inp.style.color='var(--green)';});inp.addEventListener('blur',function(){inp.style.borderColor='transparent';inp.style.color='var(--dim)';});});
+      tableWrap.querySelectorAll('.note-in').forEach(function(ta){var tk=ta.getAttribute('data-tk');ta.addEventListener('input',function(){saveNt(tk,ta.value);});});
+    });
+  });
+
   document.querySelectorAll('.sh-in').forEach(function(inp){
     var tk=inp.getAttribute('data-tk');
     inp.addEventListener('input',function(){saveSh(tk,inp.value);});
@@ -889,7 +1065,10 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var analStr=Object.keys(analystMap).map(function(t){var v=analystMap[t],pt=targetMap[t];return t+': '+v.buy+'B/'+v.hold+'H/'+v.sell+'S'+(pt?' tgt:$'+pt.mean.toFixed(0):'');}).join('\n')||'none';
   var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'');}).join('\n')||'none';
 
-  var prompt='You are a senior portfolio analyst. Write a professional close-of-market brief in 8-10 paragraphs of flowing prose. Separate paragraphs with ---. No bullet points.\n'
+  var isDecision=(document.getElementById('mode-sel').value==='decision');
+  var prompt=isDecision
+    ? 'You are a seasoned portfolio manager reviewing your own portfolio at close of market. Answer ONLY these three questions in flowing prose, one paragraph each, separated by ---. Be specific: name tickers and cite numbers.\n\n1. WHAT GENUINELY MATTERS TODAY? Of everything that moved or was reported today, what actually changes the long-term picture for any holding? Ignore noise.\n\n2. HAS MY INVESTMENT CASE CHANGED? For any holding where something happened today — earnings, guidance, macro, competitive news — has the original reason for owning it strengthened, weakened, or held steady? Name the holding and explain.\n\n3. WHERE WOULD I ADD CAPITAL? If I had fresh money today, which three holdings represent the best risk/reward given current positioning, valuation, and momentum? Rank them and explain briefly.\n\nDATA:\nPortfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\nTop movers: '+sorted.slice(0,5).map(function(q){return q.t+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%';}).join(', ')+'\nBottom: '+sorted.slice(-3).reverse().map(function(q){return q.t+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%';}).join(', ')+'\nAlerts: '+alertStr+'\nTechnical: '+techStr+'\nNews: '+newsStr+'\n\nWrite the three-paragraph decision brief now.'
+    : 'You are a senior portfolio analyst. Write a professional close-of-market brief in 8-10 paragraphs of flowing prose. Separate paragraphs with ---. No bullet points.\n'
     +'RULES: Do NOT mention insider trading or Form 4 filings under any circumstances. Every paragraph must name specific tickers and cite specific numbers.\n\n'
     +'Cover in order:\n'
     +'1. MARKET OVERVIEW: Portfolio vs SPY/QQQ. Value if available.\n'
@@ -923,7 +1102,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
       return reader.read().then(function(result){
         if(result.done){
           briefEl.innerHTML=fullBrief.split('---').map(function(p){return p.trim();}).filter(function(p){return p.length>0;}).map(function(p){return'<p>'+p.split(NL).join('<br>')+'</p>';}).join('<hr>');
-          saveArch({date:new Date().toISOString(),label:today,brief:fullBrief,avg:avgPct});
+          saveArch({date:new Date().toISOString(),label:today,brief:fullBrief,avg:avgPct,holdStr:holdStr});
           return;
         }
         var lines2=decoder.decode(result.value).split(NL);
