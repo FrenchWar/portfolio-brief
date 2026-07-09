@@ -530,12 +530,34 @@ function main(){
 
   chain=chain.then(function(){
     setP(60,'Fetching earnings...');
-    var epsTk=Object.keys(techMap).filter(function(t){return t!=='SPY';}).slice(0,8);
+    // Fetch last 4 quarters for ALL non-benchmark holdings, not just techMap top-8
+    var epsTk=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';}).map(function(h){return h.t;});
     var p4=Promise.resolve();
     epsTk.forEach(function(tk){
       p4=p4.then(function(){
-        return fhub('/stock/earnings?symbol='+tk+'&limit=1').then(function(e){if(e&&e.length>0)epsMap[tk]={date:e[0].period,actual:e[0].actual,est:e[0].estimate,surpPct:e[0].surprisePercent};}).catch(function(){});
-      }).then(function(){return slp(1300);});
+        return fhub('/stock/earnings?symbol='+tk+'&limit=4').then(function(e){
+          if(e&&e.length>0){
+            // Store most recent quarter plus compute trailing beat/miss streak
+            var beatStreak=0,missStreak=0,avgSurp=0,validQ=0;
+            e.forEach(function(q){
+              if(q.surprisePercent!=null){
+                avgSurp+=q.surprisePercent;validQ++;
+                if(q.surprisePercent>=0)beatStreak++;else missStreak++;
+              }
+            });
+            epsMap[tk]={
+              date:e[0].period,
+              actual:e[0].actual,
+              est:e[0].estimate,
+              surpPct:e[0].surprisePercent,
+              avgSurp4:validQ>0?avgSurp/validQ:null,
+              beatStreak:e[0].surprisePercent>=0?beatStreak:0,
+              missStreak:e[0].surprisePercent<0?missStreak:0,
+              quarters:e.length
+            };
+          }
+        }).catch(function(){});
+      }).then(function(){return slp(800);});
     });
     return p4;
   });
@@ -677,14 +699,16 @@ function main(){
 
   chain=chain.then(function(){
     setP(92,'Earnings previews (FMP)...');
+    // Expand window to 90 days so more upcoming reports are covered
     var upcoming=Object.keys(earningsMap).filter(function(t){
       var d=new Date(earningsMap[t]);var now=new Date();
-      return d>now&&(d-now)<30*24*3600*1000;
+      return d>now&&(d-now)<90*24*3600*1000;
     });
     var p10=Promise.resolve();
-    upcoming.slice(0,8).forEach(function(tk){
+    upcoming.slice(0,12).forEach(function(tk){
       p10=p10.then(function(){
-        return fmp('/analyst-estimates?symbol='+tk+'&period=quarter&limit=1').then(function(est){
+        // Primary: analyst-estimates
+        return fmp('/analyst-estimates?symbol='+tk+'&period=quarter&limit=2').then(function(est){
           if(est&&est.length>0){
             var next=est[0];
             earnPreviewMap[tk]=earnPreviewMap[tk]||{};
@@ -695,11 +719,37 @@ function main(){
             earnPreviewMap[tk].revHigh=next.estimatedRevenueHigh||null;
             earnPreviewMap[tk].revLow=next.estimatedRevenueLow||null;
             earnPreviewMap[tk].period=next.date||null;
-          }else{
-            earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates pending'};
+            // Year-ago comparison if second quarter available
+            if(est.length>1){
+              earnPreviewMap[tk].epsYoY=next.estimatedEpsAvg&&est[1].estimatedEpsAvg
+                ?(next.estimatedEpsAvg-est[1].estimatedEpsAvg)/Math.abs(est[1].estimatedEpsAvg)*100
+                :null;
+            }
+          } else {
+            // Fallback: derive forward estimate from last TTM EPS + historical growth
+            return fmp('/income-statement?symbol='+tk+'&period=quarter&limit=5').then(function(inc){
+              if(inc&&inc.length>=2){
+                var latest=inc[0];
+                var prior=inc[4]||inc[inc.length-1];
+                var ttmEps=inc.slice(0,4).reduce(function(s,q){return s+(q.eps||0);},0);
+                var yoyGr=prior.eps&&prior.eps!==0?(latest.eps-prior.eps)/Math.abs(prior.eps)*100:null;
+                earnPreviewMap[tk]={
+                  epsEst:ttmEps*1.04, // rough 4% forward growth assumption
+                  revEst:null,
+                  derivedFromTTM:true,
+                  ttmEps:ttmEps,
+                  yoyGr:yoyGr,
+                  note:'Estimated from TTM EPS (no analyst consensus available)'
+                };
+              } else {
+                earnPreviewMap[tk]={note:'Estimates unavailable'};
+              }
+            }).catch(function(){
+              earnPreviewMap[tk]={note:'Estimates unavailable'};
+            });
           }
         }).catch(function(){
-          earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates unavailable'};
+          earnPreviewMap[tk]={note:'Estimates unavailable'};
         });
       }).then(function(){return slp(300);});
     });
@@ -899,16 +949,26 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
 
   var epKeys=Object.keys(earnPreviewMap);
   if(epKeys.length){
-    html+='<div class="section"><h3>Earnings Preview - Next 30 Days</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Date</th><th class="r">EPS Est</th><th class="r">EPS Range</th><th class="r">Rev Est</th><th class="r">Rev Range</th></tr></thead><tbody>';
+    // Sort by date ascending
+    epKeys.sort(function(a,b){var da=earningsMap[a]||'9999',db=earningsMap[b]||'9999';return da<db?-1:1;});
+    html+='<div class="section"><h3>Earnings Preview - Next 90 Days</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Date</th><th class="r">EPS Est</th><th class="r">EPS Range</th><th class="r">Rev Est</th><th class="r">YoY EPS Δ</th><th class="r">Source</th></tr></thead><tbody>';
     epKeys.forEach(function(tk){
       var ep=earnPreviewMap[tk];
-      var epsEstStr=ep.epsEst!=null?'$'+ep.epsEst.toFixed(2):'<span class="na">--</span>';
-      var epsRangeStr=(ep.epsLow!=null&&ep.epsHigh!=null)?'$'+ep.epsLow.toFixed(2)+' - $'+ep.epsHigh.toFixed(2):'<span class="na">--</span>';
+      if(ep.note&&!ep.epsEst&&!ep.ttmEps){
+        html+='<tr><td class="tk">'+tk+'</td><td class="r" style="color:var(--yellow);">'+(earningsMap[tk]||'--')+'</td><td colspan="5" class="na" style="font-size:0.75rem;">'+ep.note+'</td></tr>';
+        return;
+      }
+      var epsEstStr=ep.epsEst!=null?'$'+ep.epsEst.toFixed(2):(ep.ttmEps!=null?'$'+ep.ttmEps.toFixed(2)+'*':'<span class="na">--</span>');
+      var epsRangeStr=(ep.epsLow!=null&&ep.epsHigh!=null)?'$'+ep.epsLow.toFixed(2)+' – $'+ep.epsHigh.toFixed(2):'<span class="na">--</span>';
       var revEstStr=ep.revEst!=null?'$'+(ep.revEst/1e9).toFixed(1)+'B':'<span class="na">--</span>';
-      var revRangeStr=(ep.revLow!=null&&ep.revHigh!=null)?'$'+(ep.revLow/1e9).toFixed(1)+'B - $'+(ep.revHigh/1e9).toFixed(1)+'B':'<span class="na">--</span>';
-      html+='<tr><td class="tk">'+tk+'</td><td class="r" style="color:var(--yellow);">'+(earningsMap[tk]||'--')+'</td><td class="r">'+epsEstStr+'</td><td class="r" style="font-size:0.75rem;color:var(--dim);">'+epsRangeStr+'</td><td class="r">'+revEstStr+'</td><td class="r" style="font-size:0.75rem;color:var(--dim);">'+revRangeStr+'</td></tr>';
+      var yoyStr='<span class="na">--</span>';
+      if(ep.epsYoY!=null)yoyStr='<span class="'+(ep.epsYoY>=0?'up':'dn')+'">'+(ep.epsYoY>=0?'+':'')+ep.epsYoY.toFixed(1)+'%</span>';
+      else if(ep.yoyGr!=null)yoyStr='<span class="'+(ep.yoyGr>=0?'up':'dn')+'">'+(ep.yoyGr>=0?'+':'')+ep.yoyGr.toFixed(1)+'%</span>';
+      var srcStr=ep.derivedFromTTM?'<span class="na" style="font-size:0.68rem;">TTM est</span>':'<span style="color:var(--green);font-size:0.68rem;">Consensus</span>';
+      html+='<tr><td class="tk">'+tk+'</td><td class="r" style="color:var(--yellow);">'+(earningsMap[tk]||'--')+'</td><td class="r">'+epsEstStr+'</td><td class="r" style="font-size:0.75rem;color:var(--dim);">'+epsRangeStr+'</td><td class="r">'+revEstStr+'</td><td class="r">'+yoyStr+'</td><td class="r">'+srcStr+'</td></tr>';
     });
-    html+='</tbody></table></div></div>';
+    html+='</tbody></table></div>';
+    html+='<div style="color:var(--dim);font-size:0.7rem;padding:0.4rem 0;">* TTM-derived estimate shown where no analyst consensus is available.</div></div>';
   }
 
   html+='<div class="section"><h3>AI Brief</h3><div id="brief-stream"><span class="cursor"></span></div></div>';
@@ -939,8 +999,25 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   }
 
   if(Object.keys(epsMap).length){
-    html+='<div class="section"><h3>Recent Earnings</h3>';
-    Object.keys(epsMap).forEach(function(t){var e=epsMap[t],beat=e.surpPct>=0;html+='<div class="ep-row"><span class="ep-tk">'+t+'</span><span class="ep-dim">'+e.date+'</span><span class="'+(beat?'ep-beat':'ep-miss')+'">'+(beat?'BEAT':'MISS')+' '+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%</span><span class="ep-dim">Act $'+(e.actual||0).toFixed(2)+' Est $'+(e.est||0).toFixed(2)+'</span></div>';});
+    html+='<div class="section"><h3>Recent Earnings <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(last quarter · 4Q avg surprise · streak)</span></h3>';
+    // Sort by absolute surprise so biggest beats/misses appear first
+    var epsSorted=Object.keys(epsMap).sort(function(a,b){return Math.abs(epsMap[b].surpPct||0)-Math.abs(epsMap[a].surpPct||0);});
+    epsSorted.forEach(function(t){
+      var e=epsMap[t];
+      if(e.surpPct==null)return;
+      var beat=e.surpPct>=0;
+      var streakTxt='';
+      if(e.beatStreak>1)streakTxt='<span class="ep-beat"> '+e.beatStreak+'Q beat streak</span>';
+      else if(e.missStreak>1)streakTxt='<span class="ep-miss"> '+e.missStreak+'Q miss streak</span>';
+      var avg4Txt=e.avgSurp4!=null?'<span class="ep-dim"> 4Q avg: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%</span>':'';
+      html+='<div class="ep-row">';
+      html+='<span class="ep-tk">'+t+'</span>';
+      html+='<span class="ep-dim">'+e.date+'</span>';
+      html+='<span class="'+(beat?'ep-beat':'ep-miss')+'">'+(beat?'BEAT':'MISS')+' '+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%</span>';
+      html+='<span class="ep-dim">Act $'+(e.actual||0).toFixed(2)+' Est $'+(e.est||0).toFixed(2)+'</span>';
+      html+=avg4Txt+streakTxt;
+      html+='</div>';
+    });
     html+='</div>';
   }
 
@@ -1058,7 +1135,15 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     return q.t+'('+san(q.th)+'): $'+(q.price||0).toFixed(2)+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'+(shv>0?' '+shv+'sh($'+val.toLocaleString('en-US',{maximumFractionDigits:0})+')':'')+(w&&w.pct>0?' wt:'+w.pct.toFixed(1)+'%':'')+(pt?' tgt:$'+pt.mean.toFixed(0):'')+(tm?' RSI:'+tm.rsi.toFixed(0)+' '+tm.sig+' '+tm.trend:'');
   }).join('\n');
   var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');if(v.fib&&v.fib.nearestName)p.push('Fib:'+v.fib.nearestName+'@$'+v.fib.nearest.toFixed(2)+(Math.abs(v.fib.nearPct)<2?' NEAR-LEVEL':''));return t+': '+p.join(', ');}).join('\n')||'none';
-  var epsStr=Object.keys(epsMap).map(function(t){var e=epsMap[t];return t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;}).join('\n')||'none';
+  var epsStr=Object.keys(epsMap).map(function(t){
+    var e=epsMap[t];
+    if(e.surpPct==null)return null;
+    var s=t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;
+    if(e.avgSurp4!=null)s+=' | 4Q avg surprise: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%';
+    if(e.beatStreak>1)s+=' | '+e.beatStreak+'Q beat streak';
+    if(e.missStreak>1)s+=' | '+e.missStreak+'Q miss streak';
+    return s;
+  }).filter(Boolean).join('\n')||'none';
   var newsStr=newsDigest.map(function(n){return n.t+': '+n.hl;}).join('\n')||'none';
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
   var alertStr=alerts.length?alerts.map(function(a){return a.t+': '+a.reason;}).join('\n'):'none';
@@ -1084,7 +1169,17 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'DATA:\n'
     +'Portfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\n'
     +'Value: '+totalFmt+'\nTop positions: '+topPos+'\n\n'
-    +'Holdings:\n'+holdStr+'\n\nAlerts:\n'+alertStr+'\n\nTechnical:\n'+techStr+'\n\nAnalyst:\n'+analStr+'\n\nEPS:\n'+epsStr+'\n\nNews:\n'+newsStr+'\n\nUpcoming earnings: '+earnStr+'\n\nWatchlist:\n'+wlStr+'\n\nPeer comparison (your holding vs sector peers):\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk];return tk+' NetMargin:'+(pm.margin!=null?pm.margin.toFixed(1)+'%':'n/a')+' GrossMargin:'+(pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'n/a')+' EV/Sales:'+(pm.evSales!=null?pm.evSales.toFixed(1):'n/a')+' EV/EBITDA:'+(pm.evEbitda!=null?pm.evEbitda.toFixed(1):'n/a')+'  vs peers: '+pm.peers.map(function(p){return p.t+' NetMgn:'+(p.margin!=null?p.margin.toFixed(1)+'%':'n/a')+' GrossMgn:'+(p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'n/a');}).join(' | ');}).join('\n')||'none'+'\n\nEarnings estimates (next 30 days):\n'+Object.keys(earnPreviewMap).map(function(tk){var ep=earnPreviewMap[tk];return tk+'('+earningsMap[tk]+'): EPS est $'+(ep.epsEst!=null?ep.epsEst.toFixed(2):'n/a')+' range $'+(ep.epsLow!=null?ep.epsLow.toFixed(2):'n/a')+'-$'+(ep.epsHigh!=null?ep.epsHigh.toFixed(2):'n/a')+' RevEst $'+(ep.revEst!=null?(ep.revEst/1e9).toFixed(1)+'B':'n/a');}).join('\n')||'none'+'\n\nWrite the complete brief now.';
+    +'Holdings:\n'+holdStr+'\n\nAlerts:\n'+alertStr+'\n\nTechnical:\n'+techStr+'\n\nAnalyst:\n'+analStr+'\n\nEPS:\n'+epsStr+'\n\nNews:\n'+newsStr+'\n\nUpcoming earnings: '+earnStr+'\n\nWatchlist:\n'+wlStr+'\n\nPeer comparison (your holding vs sector peers):\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk];return tk+' NetMargin:'+(pm.margin!=null?pm.margin.toFixed(1)+'%':'n/a')+' GrossMargin:'+(pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'n/a')+' EV/Sales:'+(pm.evSales!=null?pm.evSales.toFixed(1):'n/a')+' EV/EBITDA:'+(pm.evEbitda!=null?pm.evEbitda.toFixed(1):'n/a')+'  vs peers: '+pm.peers.map(function(p){return p.t+' NetMgn:'+(p.margin!=null?p.margin.toFixed(1)+'%':'n/a')+' GrossMgn:'+(p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'n/a');}).join(' | ');}).join('\n')||'none'+'\n\nEarnings estimates (next 30 days):\n'+Object.keys(earnPreviewMap).map(function(tk){
+  var ep=earnPreviewMap[tk];
+  if(ep.note&&!ep.epsEst&&!ep.ttmEps)return tk+'('+earningsMap[tk]+'): '+ep.note;
+  var s=tk+'('+(earningsMap[tk]||'?')+'): EPS est $'+(ep.epsEst!=null?ep.epsEst.toFixed(2):ep.ttmEps!=null?ep.ttmEps.toFixed(2)+'(TTM-derived)':'n/a');
+  if(ep.epsLow!=null&&ep.epsHigh!=null)s+=' range $'+ep.epsLow.toFixed(2)+'-$'+ep.epsHigh.toFixed(2);
+  if(ep.revEst!=null)s+=' RevEst $'+(ep.revEst/1e9).toFixed(1)+'B';
+  if(ep.epsYoY!=null)s+=' YoY EPS chg: '+(ep.epsYoY>=0?'+':'')+ep.epsYoY.toFixed(1)+'%';
+  else if(ep.yoyGr!=null)s+=' YoY EPS chg(TTM): '+(ep.yoyGr>=0?'+':'')+ep.yoyGr.toFixed(1)+'%';
+  if(ep.derivedFromTTM)s+=' [TTM-derived, no consensus]';
+  return s;
+}).join('\n')||'none'+'\n\nWrite the complete brief now.';
 
   var briefEl=document.getElementById('brief-stream');
   var fullBrief='';
