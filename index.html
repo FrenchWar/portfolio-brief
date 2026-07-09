@@ -778,6 +778,29 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   html+='<div class="sc"><div class="sc-label">Alerts</div><div class="sc-val" style="color:'+(alerts.length?'var(--yellow)':'var(--green)')+'">'+alerts.length+'</div><div class="sc-sub">'+(alerts.length?'Flags raised':'All clear')+'</div></div>';
   html+='</div>';
 
+  // Always-visible peer comparison. This does not depend on FMP.
+  // It uses the app's built-in PEER_MAP plus the current holdings list, so the
+  // section will never be blank even if FMP is unavailable or rate-limited.
+  (function(){
+    var shLocal=loadSh();
+    var base=(HOLDINGS||[]).filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';});
+    base=base.map(function(h){
+      var q=qdata.filter(function(x){return x.t===h.t;})[0]||{};
+      return {t:h.t,th:h.th,price:q.price||null,pct:q.pct||null,v:(shLocal[h.t]||0)*(q.price||0)};
+    });
+    base.sort(function(a,b){return (b.v||0)-(a.v||0);});
+    var rows=base.slice(0,15);
+    if(rows.length){
+      html+='<div class="section"><h3>Peer Comparison - Core Holdings</h3><div class="warn" style="margin-bottom:0.8rem;">This table is generated from the built-in peer map, so it appears even when FMP peer data is unavailable. Metric cells below may still be blank until FMP returns them.</div><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Holding</th><th>Theme</th><th class="r">Price</th><th class="r">Day%</th><th>Peers</th></tr></thead><tbody>';
+      rows.forEach(function(r){
+        var peers=(PEER_MAP[r.t]||[]);
+        var peerTxt=peers.length?peers.join(', '):'<span class="na">No mapped peers</span>';
+        html+='<tr><td class="tk">'+r.t+'</td><td><span class="badge">'+r.th+'</span></td><td class="r">'+fP(r.price)+'</td><td class="r">'+fPct(r.pct)+'</td><td style="font-family:monospace;color:var(--text);">'+peerTxt+'</td></tr>';
+      });
+      html+='</tbody></table></div></div>';
+    }
+  })();
+
   if(alerts.length){html+='<div class="section" style="border-color:rgba(233,69,96,0.3)"><h3>Alert Flags</h3>';alerts.forEach(function(a){html+='<div class="abar"><span class="abar-tk">'+a.t+'</span><span class="abar-r">'+a.reason+'</span><span class="abar-p '+(a.pct>=0?'up':'dn')+'">'+(a.pct>=0?'+':'')+a.pct.toFixed(2)+'%</span></div>';});html+='</div>';}
 
   var maxS=0.01;sectors.forEach(function(s){if(Math.abs(s.avg)>maxS)maxS=Math.abs(s.avg);});
