@@ -797,9 +797,38 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     html+='</div>';
   }
 
+  // Peer table safety net: build rows from current holdings even when the FMP peer step
+  // returns nothing, is rate-limited, or the user's FMP key is invalid. This prevents a blank
+  // Peer Comparison section.
+  function ensurePeerRows(){
+    var shLocal=loadSh();
+    var candidates=[];
+    qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF';}).forEach(function(q){
+      var val=(shLocal[q.t]||0)*(q.price||0);
+      candidates.push({t:q.t,th:q.th,v:val,price:q.price,pct:q.pct});
+    });
+    if(!candidates.length){
+      HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';}).forEach(function(h){
+        candidates.push({t:h.t,th:h.th,v:shLocal[h.t]||0,price:null,pct:null});
+      });
+    }
+    candidates.sort(function(a,b){return (b.v||0)-(a.v||0);});
+    candidates.slice(0,10).forEach(function(c){
+      if(!peerMap[c.t]) peerMap[c.t]={ticker:c.t,margin:null,grossMargin:null,evSales:null,evEbitda:null,derivedPE:null,peers:[]};
+      if(!peerMap[c.t].peers) peerMap[c.t].peers=[];
+      if(!peerMap[c.t].peers.length){
+        (PEER_MAP[c.t]||[]).slice(0,3).forEach(function(pt){
+          if(!peerMap[c.t].peers.some(function(p){return p.t===pt;})){
+            peerMap[c.t].peers.push({t:pt,price:null,pct:null,margin:null,grossMargin:null,mktCap:null,derivedPE:null});
+          }
+        });
+      }
+    });
+  }
+  ensurePeerRows();
   var peerKeys=Object.keys(peerMap);
   if(peerKeys.length){
-    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">Est P/E</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th><th class="r">EV/Sales</th><th class="r">EV/EBITDA</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div class="warn" style="margin-bottom:0.8rem;">If valuation/margin cells show --, FMP did not return that metric; tickers and fallback peers are still shown.</div><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">Est P/E</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th><th class="r">EV/Sales</th><th class="r">EV/EBITDA</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk];
       var qh=qdata.filter(function(q){return q.t===tk;})[0];
