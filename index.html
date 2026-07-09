@@ -178,13 +178,13 @@ var DEFAULT_HOLDINGS = [
   {t:'NKE',th:'Consumer'},{t:'NVDA',th:'Semis'},{t:'NYT',th:'Media'},
   {t:'PFE',th:'Healthcare'},{t:'PKX',th:'Materials'},{t:'QCOM',th:'Semis'},
   {t:'SBGSY',th:'Industrial'},{t:'SO',th:'Utilities'},{t:'SPGI',th:'Financials'},
-  {t:'V',th:'Financials'},{t:'TSM',th:'Semis'},{t:'VEEV',th:'Healthcare'},{t:'VRTX',th:'Healthcare'},
-  {t:'VTRS',th:'Healthcare'},{t:'WAB',th:'Industrial'},{t:'WMT',th:'Consumer'},
-  {t:'XOM',th:'Energy'},{t:'SPY',th:'Benchmark'},{t:'QQQ',th:'Benchmark'}
+  {t:'TSM',th:'Semis'},{t:'V',th:'Financials'},{t:'VEEV',th:'Healthcare'},
+  {t:'VRTX',th:'Healthcare'},{t:'VTRS',th:'Healthcare'},{t:'WAB',th:'Industrial'},
+  {t:'WMT',th:'Consumer'},{t:'XOM',th:'Energy'},{t:'SPY',th:'Benchmark'},{t:'QQQ',th:'Benchmark'}
 ];
 var HOLDINGS = DEFAULT_HOLDINGS.slice();
-var DEFAULT_WL = ['NET','FIX','NFLX','COST','V','BLK','UNH','ABT','NEE','ATZAF'];
-var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln', HOLD_K='hf_holdings', HOLD_MIG_K='hf_holdings_v_migrated';
+var DEFAULT_WL = ['NET','FIX','NFLX','COST','BLK','UNH','ABT','NEE','ATZAF','MA'];
+var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln', HOLD_K='hf_holdings';
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
@@ -204,18 +204,14 @@ function saveArch(e){var l=loadArch();l.unshift(e);if(l.length>30)l.length=30;ss
 function loadHoldings(){
   var h=sg(HOLD_K);
   if(h&&h.length){
-    // Self-healing migration: if this browser already saved an older holdings list,
-    // DEFAULT_HOLDINGS is ignored. Always insert Visa if it is missing.
+    // Ensure V is present even in old saved lists
     if(!h.some(function(x){return x.t==='V';})){
       h.push({t:'V',th:'Financials'});
-      saveHoldings(h);
+      ss(HOLD_K,h);
     }
     return h;
   }
-  h=DEFAULT_HOLDINGS.slice();
-  if(!h.some(function(x){return x.t==='V';}))h.push({t:'V',th:'Financials'});
-  saveHoldings(h);
-  return h;
+  return DEFAULT_HOLDINGS.slice();
 }
 function saveHoldings(l){ss(HOLD_K,l);}
 
@@ -252,35 +248,23 @@ function calcRSI(a,n){if(!a||a.length<n+1)return null;var sl=a.slice(-(n+1)),g=0
 function calcMACD(a){if(!a||a.length<35)return null;var e12=calcEMA(a,12),e26=calcEMA(a,26);if(e12==null||e26==null)return null;var ml=e12-e26,ms=[],i,em12,em26,sig;for(i=a.length-9;i<a.length;i++){em12=calcEMA(a.slice(0,i+1),12);em26=calcEMA(a.slice(0,i+1),26);if(em12!=null&&em26!=null)ms.push(em12-em26);}sig=ms.length>=3?ms.reduce(function(x,y){return x+y;},0)/ms.length:null;return{macd:ml,signal:sig,hist:sig!=null?ml-sig:null};}
 function calcBoll(a){if(!a||a.length<20)return null;var sl=a.slice(-20),mean=sl.reduce(function(x,y){return x+y;},0)/20,vr=sl.reduce(function(x,y){return x+Math.pow(y-mean,2);},0)/20,sd=Math.sqrt(vr),up=mean+2*sd,lo=mean-2*sd,pr=a[a.length-1],pct=sd>0?(pr-lo)/(up-lo)*100:50;return{upper:up,lower:lo,pct:pct};}
 function calcATR(h,l,c,n){n=n||14;if(!h||h.length<n+1)return null;var trs=[],i;for(i=1;i<h.length;i++)trs.push(Math.max(h[i]-l[i],Math.abs(h[i]-c[i-1]),Math.abs(l[i]-c[i-1])));var sl=trs.slice(-n);return sl.reduce(function(a,b){return a+b;},0)/n;}
-function calcFib(highs, lows, closes) {
-  if (!highs || highs.length < 20) return null;
-  var recent = Math.min(highs.length, 60);
-  var rh = highs.slice(-recent), rl = lows.slice(-recent);
-  var swingHigh = rh.reduce(function(a,b){return a>b?a:b;}, rh[0]);
-  var swingLow  = rl.reduce(function(a,b){return a<b?a:b;}, rl[0]);
-  var diff = swingHigh - swingLow;
-  if (diff <= 0) return null;
-  var price = closes[closes.length - 1];
-  var levels = {
-    r236: swingLow + diff * 0.236,
-    r382: swingLow + diff * 0.382,
-    r500: swingLow + diff * 0.500,
-    r618: swingLow + diff * 0.618,
-    r786: swingLow + diff * 0.786,
-    high: swingHigh,
-    low:  swingLow
-  };
-  var nearest = null, nearestDist = Infinity, nearestName = '';
-  var names = ['r236','r382','r500','r618','r786','high','low'];
-  var labels = ['23.6%','38.2%','50%','61.8%','78.6%','High','Low'];
-  for (var i = 0; i < names.length; i++) {
-    var dist = Math.abs(price - levels[names[i]]);
-    if (dist < nearestDist) { nearestDist = dist; nearest = levels[names[i]]; nearestName = labels[i]; }
-  }
-  var nearPct = nearest ? (price - nearest) / nearest * 100 : null;
-  return { levels: levels, nearest: nearest, nearestName: nearestName, nearPct: nearPct, swingHigh: swingHigh, swingLow: swingLow };
+function calcFib(highs,lows,closes){
+  if(!highs||highs.length<20)return null;
+  var recent=Math.min(highs.length,60);
+  var rh=highs.slice(-recent),rl=lows.slice(-recent);
+  var swingHigh=rh.reduce(function(a,b){return a>b?a:b;},rh[0]);
+  var swingLow=rl.reduce(function(a,b){return a<b?a:b;},rl[0]);
+  var diff=swingHigh-swingLow;
+  if(diff<=0)return null;
+  var price=closes[closes.length-1];
+  var levels={r236:swingLow+diff*0.236,r382:swingLow+diff*0.382,r500:swingLow+diff*0.500,r618:swingLow+diff*0.618,r786:swingLow+diff*0.786,high:swingHigh,low:swingLow};
+  var nearest=null,nearestDist=Infinity,nearestName='';
+  var names=['r236','r382','r500','r618','r786','high','low'];
+  var labels=['23.6%','38.2%','50%','61.8%','78.6%','High','Low'];
+  for(var i=0;i<names.length;i++){var dist=Math.abs(price-levels[names[i]]);if(dist<nearestDist){nearestDist=dist;nearest=levels[names[i]];nearestName=labels[i];}}
+  var nearPct=nearest?(price-nearest)/nearest*100:null;
+  return{levels:levels,nearest:nearest,nearestName:nearestName,nearPct:nearPct,swingHigh:swingHigh,swingLow:swingLow};
 }
-
 function techSig(s20,s50,rsi,pr,macd,boll){if(!s20||!s50||!rsi||!pr)return'N/A';var sc=0;if(pr>s20)sc++;if(pr>s50)sc++;if(s20>s50)sc++;if(rsi>50)sc++;if(rsi<30)sc--;if(rsi>75)sc--;if(macd&&macd.hist!=null){if(macd.hist>0)sc++;else sc--;}if(boll&&boll.pct!=null){if(boll.pct>80)sc--;if(boll.pct<20)sc++;}if(sc>=5)return'STRONG BUY';if(sc>=3)return'BUY';if(sc<=-1)return'SELL';if(sc<=1)return'WEAK';return'HOLD';}
 
 window.exportData=function(){
@@ -326,23 +310,23 @@ function renderHoldingsManager(){
   var themes=[];
   list.forEach(function(h){if(themes.indexOf(h.th)<0)themes.push(h.th);});
   var dl=document.getElementById('hm-theme-list');
-  dl.innerHTML=themes.map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'">';}).join('');
+  dl.innerHTML=themes.map(function(t){return'<option value="'+t.replace(/"/g,'&quot;')+'">';}).join('');
   var sh=loadSh();
   var rows=list.slice().sort(function(a,b){if(a.th!==b.th)return a.th<b.th?-1:1;return a.t<b.t?-1:1;});
   var container=document.getElementById('hm-list');
   if(!rows.length){container.innerHTML='<div style="color:var(--dim);font-size:0.82rem;padding:0.8rem 0;">No holdings yet.</div>';return;}
   container.innerHTML=rows.map(function(h){
     var shTxt=sh[h.t]?sh[h.t]+' sh saved':'no shares set';
-    return '<div class="hm-row"><span class="hm-row-tk">'+h.t+'</span><span class="badge">'+h.th+'</span><span class="hm-row-sh">'+shTxt+'</span><button class="hm-rm" data-hmrm="'+h.t+'">&times;</button></div>';
+    return'<div class="hm-row"><span class="hm-row-tk">'+h.t+'</span><span class="badge">'+h.th+'</span><span class="hm-row-sh">'+shTxt+'</span><button class="hm-rm" data-hmrm="'+h.t+'">&times;</button></div>';
   }).join('');
   container.querySelectorAll('[data-hmrm]').forEach(function(btn){
     btn.addEventListener('click',function(){
       var tk=btn.getAttribute('data-hmrm');
-      if(!window.confirm('Remove '+tk+' from your holdings list? Any saved shares/notes for it are kept and will reappear if you re-add it.'))return;
+      if(!window.confirm('Remove '+tk+' from your holdings list?'))return;
       var l=loadHoldings().filter(function(x){return x.t!==tk;});
       saveHoldings(l);
       var note=document.getElementById('hm-note');
-      note.textContent='Removed '+tk+'. Reload the page and click Generate Brief again to update the report.';
+      note.textContent='Removed '+tk+'. Reload and Generate Brief to update.';
       note.style.display='block';
       renderHoldingsManager();
     });
@@ -355,17 +339,17 @@ document.getElementById('hm-add-btn').addEventListener('click',function(){
   var err=document.getElementById('hm-err');
   var note=document.getElementById('hm-note');
   err.style.display='none';note.style.display='none';
-  var tk=tkInput ? tkInput.value.trim().toUpperCase() : '';
-  var th=thInput ? thInput.value.trim() : '';
+  var tk=tkInput.value.trim().toUpperCase();
+  var th=thInput.value.trim();
   if(!tk){err.textContent='Enter a ticker symbol.';err.style.display='block';return;}
   if(!/^[A-Z0-9.\-]{1,10}$/.test(tk)){err.textContent='That doesn\'t look like a valid ticker symbol.';err.style.display='block';return;}
-  if(!th) th='Financials';
+  if(!th){err.textContent='Enter a theme/sector for this holding.';err.style.display='block';return;}
   var l=loadHoldings();
   if(l.some(function(h){return h.t===tk;})){err.textContent=tk+' is already in your holdings.';err.style.display='block';return;}
   l.push({t:tk,th:th});
   saveHoldings(l);
-  tkInput.value='';if(thInput)thInput.value='';
-  note.textContent='Added '+tk+' ('+th+'). Reload the page and click Generate Brief again to fetch its data.';
+  tkInput.value='';thInput.value='';
+  note.textContent='Added '+tk+' ('+th+'). Reload and Generate Brief to fetch its data.';
   note.style.display='block';
   renderHoldingsManager();
 });
@@ -590,33 +574,12 @@ function main(){
   chain=chain.then(function(){
     setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
-
-    // Choose top holdings by dollar value. If quote data or share data is incomplete,
-    // fall back to the holdings list so the peer section never disappears entirely.
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
-      .filter(function(x){return x.v>0;})
       .sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return x.t;});
-
     if(ranked.length<3){
-      ranked=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';})
-        .slice(0,10).map(function(h){return h.t;});
-    }
-
-    // Ensure we always have a row object for each ranked holding, even if FMP is down,
-    // the FMP key is missing/invalid, or a specific endpoint returns no data.
-    ranked.forEach(function(tk){
-      peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,grossMargin:null,evSales:null,evEbitda:null,derivedPE:null,peers:[]};
-    });
-
-    function addFallbackPeers(tk){
-      if(peerMap[tk] && peerMap[tk].peers && peerMap[tk].peers.length)return;
-      var fallback=(PEER_MAP[tk]||[]).slice(0,3);
-      fallback.forEach(function(pt){
-        if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
-          peerMap[tk].peers.push({t:pt,price:null,pct:null,margin:null,grossMargin:null,mktCap:null,derivedPE:null});
-        }
-      });
+      ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .slice(0,8).map(function(q){return q.t;});
     }
 
     var p9=Promise.resolve();
@@ -624,12 +587,12 @@ function main(){
       p9=p9.then(function(){
         return fmp('/ratios-ttm?symbol='+tk).then(function(r){
           var d=r&&r.length?r[0]:r||{};
-          peerMap[tk]=peerMap[tk]||{ticker:tk,peers:[]};
+          peerMap[tk]=peerMap[tk]||{};
           peerMap[tk].ticker=tk;
           peerMap[tk].margin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
           peerMap[tk].grossMargin=d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null;
           peerMap[tk].peers=peerMap[tk].peers||[];
-        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,grossMargin:null,peers:[]};});
+        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,peers:[]};});
       }).then(function(){return slp(300);})
       .then(function(){
         return fmp('/key-metrics-ttm?symbol='+tk).then(function(r){
@@ -648,23 +611,17 @@ function main(){
             peerMap[tk].mktCap=d.marketCap||null;
             peerMap[tk].beta=d.beta||null;
             if(peerMap[tk].mktCap&&peerMap[tk].margin&&peerMap[tk].evSales){
-              var approxRev = peerMap[tk].mktCap / (peerMap[tk].evSales||1);
-              var approxNetIncome = approxRev * (peerMap[tk].margin/100);
-              peerMap[tk].derivedPE = approxNetIncome > 0 ? peerMap[tk].mktCap / approxNetIncome : null;
+              var approxRev=peerMap[tk].mktCap/(peerMap[tk].evSales||1);
+              var approxNetIncome=approxRev*(peerMap[tk].margin/100);
+              peerMap[tk].derivedPE=approxNetIncome>0?peerMap[tk].mktCap/approxNetIncome:null;
             }
           }
         }).catch(function(){});
       }).then(function(){return slp(300);})
       .then(function(){
         return fmp('/stock-peers?symbol='+tk).then(function(peers){
-          var peerTickers=[];
-          if(peers&&peers.length){
-            peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,3);
-          }
-          if(!peerTickers.length){
-            peerTickers=(PEER_MAP[tk]||[]).slice(0,3).map(function(sym){return{symbol:sym,price:null,mktCap:null};});
-          }
-          if(!peerTickers.length){addFallbackPeers(tk);return;}
+          if(!peers||!peers.length)return;
+          var peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,3);
           var pp=Promise.resolve();
           peerTickers.forEach(function(peerObj){
             var pt=peerObj.symbol;
@@ -672,27 +629,24 @@ function main(){
               return fmp('/ratios-ttm?symbol='+pt).then(function(r){
                 var d=r&&r.length?r[0]:r||{};
                 var pq=qdata.filter(function(q){return q.t===pt;})[0];
-                if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
-                  var pNetMargin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
+                if(peerMap[tk]){
                   peerMap[tk].peers.push({
                     t:pt,
                     price:peerObj.price||null,
                     pct:pq?pq.pct:null,
-                    margin:pNetMargin,
+                    margin:d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null,
                     grossMargin:d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null,
                     mktCap:peerObj.mktCap||null,
                     derivedPE:null
                   });
                 }
               }).catch(function(){
-                if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
-                  peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,derivedPE:null});
-                }
+                if(peerMap[tk])peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,derivedPE:null});
               });
             }).then(function(){return slp(300);});
           });
-          return pp.then(function(){addFallbackPeers(tk);});
-        }).catch(function(){addFallbackPeers(tk);});
+          return pp;
+        }).catch(function(){});
       }).then(function(){return slp(300);});
     });
     return p9;
@@ -718,7 +672,7 @@ function main(){
             earnPreviewMap[tk].revHigh=next.estimatedRevenueHigh||null;
             earnPreviewMap[tk].revLow=next.estimatedRevenueLow||null;
             earnPreviewMap[tk].period=next.date||null;
-          } else {
+          }else{
             earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates pending'};
           }
         }).catch(function(){
@@ -739,7 +693,6 @@ function main(){
 }
 
 function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap){
-  console.log('Rendering report. Holdings:', (typeof loadHoldings === 'function' ? loadHoldings() : HOLDINGS), 'Peer map V:', PEER_MAP && PEER_MAP.V);
   setP(90,'Rendering...');
   var valid=qdata.filter(function(q){return q.pct!=null&&q.th!=='Benchmark';});
   var sorted=valid.slice().sort(function(a,b){return b.pct-a.pct;});
@@ -779,49 +732,6 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   html+='<div class="sc"><div class="sc-label">Alerts</div><div class="sc-val" style="color:'+(alerts.length?'var(--yellow)':'var(--green)')+'">'+alerts.length+'</div><div class="sc-sub">'+(alerts.length?'Flags raised':'All clear')+'</div></div>';
   html+='</div>';
 
-  // Always-visible peer comparison. This does not depend on FMP.
-  // It uses the app's built-in PEER_MAP plus the current holdings list, so the
-  // section will never be blank even if FMP is unavailable or rate-limited.
-  (function(){
-    var shLocal=loadSh();
-    var base=(HOLDINGS||[]).filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';});
-    base=base.map(function(h){
-      var q=qdata.filter(function(x){return x.t===h.t;})[0]||{};
-      return {t:h.t,th:h.th,price:q.price||null,pct:q.pct||null,v:(shLocal[h.t]||0)*(q.price||0)};
-    });
-    base.sort(function(a,b){return (b.v||0)-(a.v||0);});
-    var rows=base.slice(0,15);
-    if(rows.length){
-      html+='<div class="section"><h3>Peer Comparison - Core Holdings</h3><div class="warn" style="margin-bottom:0.8rem;">This table is generated from the built-in peer map, so it appears even when FMP peer data is unavailable. Metric cells below may still be blank until FMP returns them.</div><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Holding</th><th>Theme</th><th class="r">Price</th><th class="r">Day%</th><th>Peers</th></tr></thead><tbody>';
-      rows.forEach(function(r){
-        var peers=(PEER_MAP[r.t]||[]);
-        var peerTxt=peers.length?peers.join(', '):'<span class="na">No mapped peers</span>';
-        html+='<tr><td class="tk">'+r.t+'</td><td><span class="badge">'+r.th+'</span></td><td class="r">'+fP(r.price)+'</td><td class="r">'+fPct(r.pct)+'</td><td style="font-family:monospace;color:var(--text);">'+peerTxt+'</td></tr>';
-      });
-      html+='</tbody></table></div></div>';
-    }
-  })();
-
-
-
-  // GUARANTEED PEER SECTION: does not rely on FMP, Finnhub quotes, qdata, or async calls.
-  // It uses only the holdings list and the local PEER_MAP, so it cannot render blank.
-  (function(){
-    var peerFallbackHoldings = (typeof loadHoldings === 'function' ? loadHoldings() : null) || [];
-    if(!peerFallbackHoldings || !peerFallbackHoldings.length){ peerFallbackHoldings = DEFAULT_HOLDINGS.slice(); }
-    peerFallbackHoldings = peerFallbackHoldings.filter(function(h){ return h && h.t && h.th !== 'Benchmark' && h.th !== 'ETF'; });
-    if(!peerFallbackHoldings.some(function(h){ return h.t === 'V'; })){
-      peerFallbackHoldings.push({t:'V', th:'Financials'});
-    }
-    var peerFallbackRows = peerFallbackHoldings.map(function(h){
-      var peers = (PEER_MAP && PEER_MAP[h.t]) ? PEER_MAP[h.t].slice(0,3) : [];
-      return '<tr><td class="tk">'+h.t+'</td><td><span class="badge">'+(h.th||'Uncategorized')+'</span></td><td style="font-family:monospace;color:var(--text);">'+(peers.length ? peers.join(', ') : '<span class="na">No mapped peers</span>')+'</td></tr>';
-    }).join('');
-    html += '<div class="section" id="guaranteed-peer-comparison"><h3>Peer Comparison - Ticker Map</h3>'+
-      '<div class="warn" style="margin-bottom:0.8rem;">This section is generated locally from the built-in peer map and will display even if FMP/Finnhub data fails. It is intended as a reliable fallback; the valuation/margin peer table below may still depend on FMP.</div>'+
-      '<div style="overflow-x:auto"><table class="htable"><thead><tr><th>Holding</th><th>Theme</th><th>Mapped Peers</th></tr></thead><tbody>'+peerFallbackRows+'</tbody></table></div></div>';
-  })();
-
   if(alerts.length){html+='<div class="section" style="border-color:rgba(233,69,96,0.3)"><h3>Alert Flags</h3>';alerts.forEach(function(a){html+='<div class="abar"><span class="abar-tk">'+a.t+'</span><span class="abar-r">'+a.reason+'</span><span class="abar-p '+(a.pct>=0?'up':'dn')+'">'+(a.pct>=0?'+':'')+a.pct.toFixed(2)+'%</span></div>';});html+='</div>';}
 
   var maxS=0.01;sectors.forEach(function(s){if(Math.abs(s.avg)>maxS)maxS=Math.abs(s.avg);});
@@ -837,42 +747,13 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var swItems=Object.keys(sectorW).filter(function(k){return sectorW[k]>0;}).sort(function(a,b){return sectorW[b]-sectorW[a];});
     var mxW=0.01;swItems.forEach(function(k){if(sectorW[k]>mxW)mxW=sectorW[k];});
     html+='<div class="section"><h3>Portfolio Concentration</h3>';
-    swItems.forEach(function(k){var over=sectorW[k]>25;html+='<div class="srow"><span class="slabel">'+k+'</span><div class="sbar-wrap"><div class="sbar-fill" style="width:'+sectorW[k]/mxW*100+'%;background:'+(over?'var(--yellow)':'var(--green)')+'"></div></div><span class="spct" style="color:'+(over?'var(--yellow)':'var(--white)')+'">'+sectorW[k].toFixed(1)+'%'+(over?' (!)'  :'')+'</span></div>';});
+    swItems.forEach(function(k){var over=sectorW[k]>25;html+='<div class="srow"><span class="slabel">'+k+'</span><div class="sbar-wrap"><div class="sbar-fill" style="width:'+sectorW[k]/mxW*100+'%;background:'+(over?'var(--yellow)':'var(--green)')+'"></div></div><span class="spct" style="color:'+(over?'var(--yellow)':'var(--white)')+'">'+sectorW[k].toFixed(1)+'%'+(over?' (!)':'')+'</span></div>';});
     html+='</div>';
   }
 
-  // Peer table safety net: build rows from current holdings even when the FMP peer step
-  // returns nothing, is rate-limited, or the user's FMP key is invalid. This prevents a blank
-  // Peer Comparison section.
-  function ensurePeerRows(){
-    var shLocal=loadSh();
-    var candidates=[];
-    qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF';}).forEach(function(q){
-      var val=(shLocal[q.t]||0)*(q.price||0);
-      candidates.push({t:q.t,th:q.th,v:val,price:q.price,pct:q.pct});
-    });
-    if(!candidates.length){
-      HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';}).forEach(function(h){
-        candidates.push({t:h.t,th:h.th,v:shLocal[h.t]||0,price:null,pct:null});
-      });
-    }
-    candidates.sort(function(a,b){return (b.v||0)-(a.v||0);});
-    candidates.slice(0,10).forEach(function(c){
-      if(!peerMap[c.t]) peerMap[c.t]={ticker:c.t,margin:null,grossMargin:null,evSales:null,evEbitda:null,derivedPE:null,peers:[]};
-      if(!peerMap[c.t].peers) peerMap[c.t].peers=[];
-      if(!peerMap[c.t].peers.length){
-        (PEER_MAP[c.t]||[]).slice(0,3).forEach(function(pt){
-          if(!peerMap[c.t].peers.some(function(p){return p.t===pt;})){
-            peerMap[c.t].peers.push({t:pt,price:null,pct:null,margin:null,grossMargin:null,mktCap:null,derivedPE:null});
-          }
-        });
-      }
-    });
-  }
-  ensurePeerRows();
   var peerKeys=Object.keys(peerMap);
   if(peerKeys.length){
-    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div class="warn" style="margin-bottom:0.8rem;">If valuation/margin cells show --, FMP did not return that metric; tickers and fallback peers are still shown.</div><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">Est P/E</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th><th class="r">EV/Sales</th><th class="r">EV/EBITDA</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">Est P/E</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th><th class="r">EV/Sales</th><th class="r">EV/EBITDA</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk];
       var qh=qdata.filter(function(q){return q.t===tk;})[0];
@@ -977,7 +858,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var arch=loadArch();
   if(arch.length){
     html+='<div class="section"><h3>Brief Archive ('+arch.length+')</h3>';
-    arch.forEach(function(e,i){html+='<div class="arch-entry"><div class="arch-date">'+new Date(e.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+' avg '+(e.avg>=0?'+':'')+e.avg.toFixed(2)+'%</div><div class="arch-prev" id="ap-'+i+'">'+(e.brief||'').slice(0,200)+'...</div><button class="arch-btn" id="ab-'+i+'" onclick="toggleArch('+i+')">Read full brief</button><div class="arch-full" id="af-'+i+'">'+(e.brief||'').split('---').map(function(p){return '<p style="margin-bottom:0.8em">'+p.trim()+'</p>';}).filter(function(p){return p.length>20;}).join('')+'</div></div>';});
+    arch.forEach(function(e,i){html+='<div class="arch-entry"><div class="arch-date">'+new Date(e.date).toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})+' avg '+(e.avg>=0?'+':'')+e.avg.toFixed(2)+'%</div><div class="arch-prev" id="ap-'+i+'">'+(e.brief||'').slice(0,200)+'...</div><button class="arch-btn" id="ab-'+i+'" onclick="toggleArch('+i+')">Read full brief</button><div class="arch-full" id="af-'+i+'">'+(e.brief||'').split('---').map(function(p){return'<p style="margin-bottom:0.8em">'+p.trim()+'</p>';}).filter(function(p){return p.length>20;}).join('')+'</div></div>';});
     html+='</div>';
   }
 
@@ -1000,9 +881,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var w=wm[q.t],pt=targetMap[q.t],tm=techMap[q.t],shv=sh[q.t]||0,val=shv*(q.price||0);
     return q.t+'('+san(q.th)+'): $'+(q.price||0).toFixed(2)+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'+(shv>0?' '+shv+'sh($'+val.toLocaleString('en-US',{maximumFractionDigits:0})+')':'')+(w&&w.pct>0?' wt:'+w.pct.toFixed(1)+'%':'')+(pt?' tgt:$'+pt.mean.toFixed(0):'')+(tm?' RSI:'+tm.rsi.toFixed(0)+' '+tm.sig+' '+tm.trend:'');
   }).join('\n');
-  var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');
-    if(v.fib&&v.fib.nearestName)p.push('Fib:'+v.fib.nearestName+'@$'+v.fib.nearest.toFixed(2)+(Math.abs(v.fib.nearPct)<2?' NEAR-LEVEL':''));
-    return t+': '+p.join(', ');}).join('\n')||'none';
+  var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');if(v.fib&&v.fib.nearestName)p.push('Fib:'+v.fib.nearestName+'@$'+v.fib.nearest.toFixed(2)+(Math.abs(v.fib.nearPct)<2?' NEAR-LEVEL':''));return t+': '+p.join(', ');}).join('\n')||'none';
   var epsStr=Object.keys(epsMap).map(function(t){var e=epsMap[t];return t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;}).join('\n')||'none';
   var newsStr=newsDigest.map(function(n){return n.t+': '+n.hl;}).join('\n')||'none';
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
