@@ -590,12 +590,33 @@ function main(){
   chain=chain.then(function(){
     setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
+
+    // Choose top holdings by dollar value. If quote data or share data is incomplete,
+    // fall back to the holdings list so the peer section never disappears entirely.
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
+      .filter(function(x){return x.v>0;})
       .sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return x.t;});
+
     if(ranked.length<3){
-      ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
-        .slice(0,8).map(function(q){return q.t;});
+      ranked=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';})
+        .slice(0,10).map(function(h){return h.t;});
+    }
+
+    // Ensure we always have a row object for each ranked holding, even if FMP is down,
+    // the FMP key is missing/invalid, or a specific endpoint returns no data.
+    ranked.forEach(function(tk){
+      peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,grossMargin:null,evSales:null,evEbitda:null,derivedPE:null,peers:[]};
+    });
+
+    function addFallbackPeers(tk){
+      if(peerMap[tk] && peerMap[tk].peers && peerMap[tk].peers.length)return;
+      var fallback=(PEER_MAP[tk]||[]).slice(0,3);
+      fallback.forEach(function(pt){
+        if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
+          peerMap[tk].peers.push({t:pt,price:null,pct:null,margin:null,grossMargin:null,mktCap:null,derivedPE:null});
+        }
+      });
     }
 
     var p9=Promise.resolve();
@@ -603,12 +624,12 @@ function main(){
       p9=p9.then(function(){
         return fmp('/ratios-ttm?symbol='+tk).then(function(r){
           var d=r&&r.length?r[0]:r||{};
-          peerMap[tk]=peerMap[tk]||{};
+          peerMap[tk]=peerMap[tk]||{ticker:tk,peers:[]};
           peerMap[tk].ticker=tk;
           peerMap[tk].margin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
           peerMap[tk].grossMargin=d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null;
           peerMap[tk].peers=peerMap[tk].peers||[];
-        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,peers:[]};});
+        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,grossMargin:null,peers:[]};});
       }).then(function(){return slp(300);})
       .then(function(){
         return fmp('/key-metrics-ttm?symbol='+tk).then(function(r){
@@ -636,8 +657,14 @@ function main(){
       }).then(function(){return slp(300);})
       .then(function(){
         return fmp('/stock-peers?symbol='+tk).then(function(peers){
-          if(!peers||!peers.length)return;
-          var peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,3);
+          var peerTickers=[];
+          if(peers&&peers.length){
+            peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,3);
+          }
+          if(!peerTickers.length){
+            peerTickers=(PEER_MAP[tk]||[]).slice(0,3).map(function(sym){return{symbol:sym,price:null,mktCap:null};});
+          }
+          if(!peerTickers.length){addFallbackPeers(tk);return;}
           var pp=Promise.resolve();
           peerTickers.forEach(function(peerObj){
             var pt=peerObj.symbol;
@@ -645,9 +672,8 @@ function main(){
               return fmp('/ratios-ttm?symbol='+pt).then(function(r){
                 var d=r&&r.length?r[0]:r||{};
                 var pq=qdata.filter(function(q){return q.t===pt;})[0];
-                if(peerMap[tk]){
+                if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
                   var pNetMargin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
-                  var pDerivedPE=null;
                   peerMap[tk].peers.push({
                     t:pt,
                     price:peerObj.price||null,
@@ -655,16 +681,18 @@ function main(){
                     margin:pNetMargin,
                     grossMargin:d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null,
                     mktCap:peerObj.mktCap||null,
-                    derivedPE:pDerivedPE
+                    derivedPE:null
                   });
                 }
               }).catch(function(){
-                if(peerMap[tk])peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,derivedPE:null});
+                if(peerMap[tk] && !peerMap[tk].peers.some(function(p){return p.t===pt;})){
+                  peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,derivedPE:null});
+                }
               });
             }).then(function(){return slp(300);});
           });
-          return pp;
-        }).catch(function(){});
+          return pp.then(function(){addFallbackPeers(tk);});
+        }).catch(function(){addFallbackPeers(tk);});
       }).then(function(){return slp(300);});
     });
     return p9;
