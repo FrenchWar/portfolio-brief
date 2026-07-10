@@ -1255,6 +1255,16 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   return s;
 }).join('\n')||'none'+'\n\nWrite the complete brief now.';
 
+  // DEBUG: log exactly what Claude receives for EPS
+  console.log('=== EPS STRING SENT TO CLAUDE ===');
+  console.log(epsStr);
+  console.log('=== EARN PREVIEW STRING ===');
+  console.log(Object.keys(earnPreviewMap).length+' entries in earnPreviewMap');
+  console.log('=== epsMap keys ===');
+  console.log(Object.keys(epsMap).join(', ')||'EMPTY');
+  console.log('=== peerMap keys ===');
+  console.log(Object.keys(peerMap).join(', ')||'EMPTY');
+
   var briefEl=document.getElementById('brief-stream');
   var fullBrief='';
 
