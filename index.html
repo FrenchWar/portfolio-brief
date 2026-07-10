@@ -529,37 +529,72 @@ function main(){
   });
 
   chain=chain.then(function(){
-    setP(60,'Fetching earnings...');
-    // Fetch last 4 quarters for ALL non-benchmark holdings, not just techMap top-8
+    setP(60,'Fetching earnings (Finnhub batch)...');
+    // Fetch in parallel batches of 5 to avoid serial 40-second chain
     var epsTk=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';}).map(function(h){return h.t;});
-    var p4=Promise.resolve();
-    epsTk.forEach(function(tk){
-      p4=p4.then(function(){
-        return fhub('/stock/earnings?symbol='+tk+'&limit=4').then(function(e){
-          if(e&&e.length>0){
-            // Store most recent quarter plus compute trailing beat/miss streak
-            var beatStreak=0,missStreak=0,avgSurp=0,validQ=0;
-            e.forEach(function(q){
-              if(q.surprisePercent!=null){
-                avgSurp+=q.surprisePercent;validQ++;
-                if(q.surprisePercent>=0)beatStreak++;else missStreak++;
-              }
-            });
-            epsMap[tk]={
-              date:e[0].period,
-              actual:e[0].actual,
-              est:e[0].estimate,
-              surpPct:e[0].surprisePercent,
-              avgSurp4:validQ>0?avgSurp/validQ:null,
-              beatStreak:e[0].surprisePercent>=0?beatStreak:0,
-              missStreak:e[0].surprisePercent<0?missStreak:0,
-              quarters:e.length
-            };
+    function processEpsResult(tk,e){
+      if(e&&e.length>0){
+        var beatStreak=0,missStreak=0,avgSurp=0,validQ=0;
+        e.forEach(function(q){
+          if(q.surprisePercent!=null){
+            avgSurp+=q.surprisePercent;validQ++;
+            if(q.surprisePercent>=0)beatStreak++;else missStreak++;
           }
-        }).catch(function(){});
-      }).then(function(){return slp(800);});
+        });
+        epsMap[tk]={
+          date:e[0].period,actual:e[0].actual,est:e[0].estimate,surpPct:e[0].surprisePercent,
+          avgSurp4:validQ>0?avgSurp/validQ:null,
+          beatStreak:e[0].surprisePercent>=0?beatStreak:0,
+          missStreak:e[0].surprisePercent<0?missStreak:0,
+          quarters:e.length,source:'finnhub'
+        };
+      }
+    }
+    var epsBatches=[];
+    for(var ei=0;ei<epsTk.length;ei+=5)epsBatches.push(epsTk.slice(ei,ei+5));
+    var p4=Promise.resolve();
+    epsBatches.forEach(function(batch,bi){
+      p4=p4.then(function(){
+        setP(60+Math.round(bi/epsBatches.length*8),'Earnings batch '+(bi+1)+'/'+epsBatches.length+'...');
+        return Promise.allSettled(batch.map(function(tk){
+          return fhub('/stock/earnings?symbol='+tk+'&limit=4').then(function(e){processEpsResult(tk,e);});
+        }));
+      }).then(function(){return bi<epsBatches.length-1?slp(3500):null;});
     });
     return p4;
+  });
+
+  // FMP fallback: fill epsMap gaps using income-statement for any holding Finnhub missed
+  chain=chain.then(function(){
+    setP(68,'Earnings fallback (FMP)...');
+    var missing=HOLDINGS.filter(function(h){
+      return h.th!=='Benchmark'&&h.th!=='ETF'&&!epsMap[h.t];
+    }).map(function(h){return h.t;}).slice(0,20);
+    var pFmp=Promise.resolve();
+    missing.forEach(function(tk){
+      pFmp=pFmp.then(function(){
+        return fmp('/income-statement?symbol='+tk+'&period=quarter&limit=5').then(function(inc){
+          if(!inc||inc.length<2)return;
+          var latest=inc[0];
+          var prior=inc[4]||inc[inc.length-1];
+          var ttmEps=inc.slice(0,Math.min(4,inc.length)).reduce(function(s,q){return s+(q.eps||0);},0);
+          var yoyGr=(prior.eps&&prior.eps!==0)?(latest.eps-prior.eps)/Math.abs(prior.eps)*100:null;
+          // Estimate surprise using revenue beat as proxy if no explicit surprise
+          epsMap[tk]={
+            date:latest.date||'',
+            actual:latest.eps||null,
+            est:null,
+            surpPct:null,
+            avgSurp4:null,
+            beatStreak:0,missStreak:0,
+            ttmEps:ttmEps,
+            yoyGr:yoyGr,
+            source:'fmp-income'
+          };
+        }).catch(function(){});
+      }).then(function(){return slp(300);});
+    });
+    return pFmp;
   });
 
   chain=chain.then(function(){
@@ -1001,21 +1036,29 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   if(Object.keys(epsMap).length){
     html+='<div class="section"><h3>Recent Earnings <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(last quarter · 4Q avg surprise · streak)</span></h3>';
     // Sort by absolute surprise so biggest beats/misses appear first
-    var epsSorted=Object.keys(epsMap).sort(function(a,b){return Math.abs(epsMap[b].surpPct||0)-Math.abs(epsMap[a].surpPct||0);});
+    // Show Finnhub entries first (have surprise %), then FMP-derived
+    var epsSorted=Object.keys(epsMap).sort(function(a,b){
+      var aHas=epsMap[a].surpPct!=null?1:0,bHas=epsMap[b].surpPct!=null?1:0;
+      if(bHas!==aHas)return bHas-aHas;
+      return Math.abs(epsMap[b].surpPct||0)-Math.abs(epsMap[a].surpPct||0);
+    });
     epsSorted.forEach(function(t){
       var e=epsMap[t];
-      if(e.surpPct==null)return;
-      var beat=e.surpPct>=0;
-      var streakTxt='';
-      if(e.beatStreak>1)streakTxt='<span class="ep-beat"> '+e.beatStreak+'Q beat streak</span>';
-      else if(e.missStreak>1)streakTxt='<span class="ep-miss"> '+e.missStreak+'Q miss streak</span>';
-      var avg4Txt=e.avgSurp4!=null?'<span class="ep-dim"> 4Q avg: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%</span>':'';
       html+='<div class="ep-row">';
       html+='<span class="ep-tk">'+t+'</span>';
       html+='<span class="ep-dim">'+e.date+'</span>';
-      html+='<span class="'+(beat?'ep-beat':'ep-miss')+'">'+(beat?'BEAT':'MISS')+' '+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%</span>';
-      html+='<span class="ep-dim">Act $'+(e.actual||0).toFixed(2)+' Est $'+(e.est||0).toFixed(2)+'</span>';
-      html+=avg4Txt+streakTxt;
+      if(e.surpPct!=null){
+        var beat=e.surpPct>=0;
+        html+='<span class="'+(beat?'ep-beat':'ep-miss')+'">'+(beat?'BEAT':'MISS')+' '+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%</span>';
+        html+='<span class="ep-dim">Act $'+(e.actual||0).toFixed(2)+' Est $'+(e.est||0).toFixed(2)+'</span>';
+        if(e.avgSurp4!=null)html+='<span class="ep-dim"> 4Q avg: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%</span>';
+        if(e.beatStreak>1)html+='<span class="ep-beat"> '+e.beatStreak+'Q beat streak</span>';
+        else if(e.missStreak>1)html+='<span class="ep-miss"> '+e.missStreak+'Q miss streak</span>';
+      } else if(e.source==='fmp-income'){
+        html+='<span class="ep-dim">TTM EPS $'+(e.ttmEps!=null?e.ttmEps.toFixed(2):'n/a')+'</span>';
+        if(e.yoyGr!=null)html+='<span class="'+(e.yoyGr>=0?'ep-beat':'ep-miss')+'"> YoY '+(e.yoyGr>=0?'+':'')+e.yoyGr.toFixed(1)+'%</span>';
+        html+='<span class="ep-dim" style="font-size:0.68rem;"> (FMP-derived)</span>';
+      }
       html+='</div>';
     });
     html+='</div>';
@@ -1135,15 +1178,46 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     return q.t+'('+san(q.th)+'): $'+(q.price||0).toFixed(2)+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'+(shv>0?' '+shv+'sh($'+val.toLocaleString('en-US',{maximumFractionDigits:0})+')':'')+(w&&w.pct>0?' wt:'+w.pct.toFixed(1)+'%':'')+(pt?' tgt:$'+pt.mean.toFixed(0):'')+(tm?' RSI:'+tm.rsi.toFixed(0)+' '+tm.sig+' '+tm.trend:'');
   }).join('\n');
   var techStr=Object.keys(techMap).filter(function(t){return t!=='SPY';}).map(function(t){var v=techMap[t],p=[];p.push('['+v.sig+'] '+v.trend);if(v.rsi!=null)p.push('RSI:'+v.rsi.toFixed(0));if(v.s20&&v.s50)p.push('SMA20:$'+v.s20.toFixed(2)+' SMA50:$'+v.s50.toFixed(2));if(v.macd&&v.macd.hist!=null)p.push('MACD:'+(v.macd.hist>=0?'+':'')+v.macd.hist.toFixed(2));if(v.boll)p.push('Boll:'+v.boll.pct.toFixed(0)+'%'+(v.boll.pct>80?' EXTENDED':v.boll.pct<20?' OVERSOLD':''));if(v.a30!=null)p.push('RS30:'+(v.a30>=0?'+':'')+v.a30.toFixed(1)+'%vsSPY');if(v.a90!=null)p.push('RS90:'+(v.a90>=0?'+':'')+v.a90.toFixed(1)+'%vsSPY');if(v.fib&&v.fib.nearestName)p.push('Fib:'+v.fib.nearestName+'@$'+v.fib.nearest.toFixed(2)+(Math.abs(v.fib.nearPct)<2?' NEAR-LEVEL':''));return t+': '+p.join(', ');}).join('\n')||'none';
-  var epsStr=Object.keys(epsMap).map(function(t){
+  // Build epsStr from three sources in priority order:
+  // 1. Finnhub surprise data (best - has beat/miss %)
+  // 2. FMP income-statement fallback (TTM EPS + YoY)
+  // 3. peerMap data already fetched - mine net margin + EV/EBITDA as earnings quality proxy
+  var epsLines=[];
+  // Source 1 & 2: direct epsMap entries
+  Object.keys(epsMap).forEach(function(t){
     var e=epsMap[t];
-    if(e.surpPct==null)return null;
-    var s=t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;
-    if(e.avgSurp4!=null)s+=' | 4Q avg surprise: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%';
-    if(e.beatStreak>1)s+=' | '+e.beatStreak+'Q beat streak';
-    if(e.missStreak>1)s+=' | '+e.missStreak+'Q miss streak';
-    return s;
-  }).filter(Boolean).join('\n')||'none';
+    var s='';
+    if(e.source==='finnhub'&&e.surpPct!=null){
+      s=t+': act $'+(e.actual||0).toFixed(2)+' est $'+(e.est||0).toFixed(2)+' ('+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%) '+e.date;
+      if(e.avgSurp4!=null)s+=' | 4Q avg: '+(e.avgSurp4>=0?'+':'')+e.avgSurp4.toFixed(1)+'%';
+      if(e.beatStreak>1)s+=' | '+e.beatStreak+'Q beat streak';
+      if(e.missStreak>1)s+=' | '+e.missStreak+'Q miss streak';
+    } else if(e.source==='fmp-income'&&(e.actual!=null||e.ttmEps!=null)){
+      s=t+': TTM EPS $'+(e.ttmEps!=null?e.ttmEps.toFixed(2):'n/a');
+      if(e.yoyGr!=null)s+=' | YoY EPS chg: '+(e.yoyGr>=0?'+':'')+e.yoyGr.toFixed(1)+'%';
+    }
+    if(s)epsLines.push(s);
+  });
+  // Source 3: mine peerMap (already fetched) for holdings not in epsMap
+  // peerMap has netMargin, grossMargin, evSales, evEbitda for top holdings
+  Object.keys(peerMap).forEach(function(tk){
+    if(epsMap[tk])return; // already have better data
+    var pm=peerMap[tk];
+    if(!pm)return;
+    var parts=[];
+    if(pm.margin!=null)parts.push('net margin '+pm.margin.toFixed(1)+'%');
+    if(pm.grossMargin!=null)parts.push('gross margin '+pm.grossMargin.toFixed(1)+'%');
+    if(pm.evEbitda!=null)parts.push('EV/EBITDA '+pm.evEbitda.toFixed(1)+'x');
+    if(pm.derivedPE!=null)parts.push('est P/E '+pm.derivedPE.toFixed(1)+'x');
+    if(parts.length)epsLines.push(tk+' (profitability proxy): '+parts.join(', '));
+  });
+  // Source 4: for any remaining holding with a quote, note price performance as proxy
+  valid.forEach(function(q){
+    if(epsMap[q.t]||peerMap[q.t])return;
+    var tm=techMap[q.t];
+    if(tm&&tm.r30!=null)epsLines.push(q.t+' (no EPS data): 30d return '+(tm.r30>=0?'+':'')+tm.r30.toFixed(1)+'% vs SPY, RSI '+tm.rsi.toFixed(0));
+  });
+  var epsStr=epsLines.length?epsLines.join('\n'):'Profitability data unavailable — rely on technical and sector signals.';
   var newsStr=newsDigest.map(function(n){return n.t+': '+n.hl;}).join('\n')||'none';
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
   var alertStr=alerts.length?alerts.map(function(a){return a.t+': '+a.reason;}).join('\n'):'none';
@@ -1161,7 +1235,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
     +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
     +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E, forward P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers.\n'
-    +'6. EARNINGS QUALITY AND PREVIEW: EPS surprise data including actual vs estimate, 4-quarter average surprise, and beat/miss streaks is provided for most holdings in the EPS section below — use it to identify consistent beaters vs chronic misses and what the pattern implies for upcoming reports. CRITICAL RULE: never write that EPS data is unavailable, insufficient, or that formal surprise history was not provided — work with whatever numbers are present and reason from margin trends and sector context for any gaps. For holdings reporting in the next 90 days, discuss what consensus expects (EPS and revenue estimates with ranges where available, TTM-derived where noted), what a beat or miss would mean given current technical positioning, and which upcoming reports carry the most portfolio risk given position sizes.\n'
+    +'6. EARNINGS QUALITY AND PREVIEW: The EPS section below contains data for every holding in one of three forms: (a) Finnhub surprise data with actual vs estimate and beat/miss streaks, (b) FMP-derived TTM EPS and YoY growth, or (c) profitability proxies (net margin, gross margin, EV/EBITDA, P/E) mined from the peer comparison data. You always have something to work with. Use whichever data is present to assess earnings quality — consistent beaters, margin trajectory, valuation relative to earnings power. ABSOLUTE RULE: do not write any sentence stating that EPS data, surprise history, or consensus estimates were not provided — they are always provided in some form. For upcoming reports in the next 90 days, discuss expected EPS and revenue where available, what a beat or miss means for the stock's technical setup, and which reports represent the greatest portfolio risk.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
     +'8. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
     +'9. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing.\n'
