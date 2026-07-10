@@ -115,6 +115,30 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 .hm-rm:hover{color:var(--red);}
 #hm-close-btn{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0.5rem 1.1rem;font-size:0.82rem;cursor:pointer;}
 
+/* Fresh Capital Panel */
+.fc-wrap{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;}
+.fc-card{background:rgba(100,255,218,0.04);border:1px solid rgba(100,255,218,0.25);border-radius:10px;padding:1.1rem 1.2rem;}
+.fc-rank{font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);margin-bottom:0.3rem;}
+.fc-tk{font-family:monospace;font-weight:800;color:var(--white);font-size:1.1rem;}
+.fc-theme{display:inline-block;margin-left:0.5rem;font-size:0.65rem;padding:0.1rem 0.45rem;border-radius:4px;background:rgba(83,52,131,0.6);color:#c9b8ff;vertical-align:middle;}
+.fc-metrics{display:flex;flex-wrap:wrap;gap:0.5rem;margin:0.6rem 0;}
+.fc-metric{font-size:0.72rem;background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:4px;padding:0.2rem 0.5rem;color:var(--text);}
+.fc-metric span{color:var(--green);font-weight:700;}
+.fc-reason{font-size:0.8rem;color:var(--text);line-height:1.55;margin-top:0.5rem;}
+/* Quality Score */
+.qs-wrap{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.8rem;}
+.qs-card{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:0.9rem 1rem;}
+.qs-tk{font-family:monospace;font-weight:700;color:var(--white);font-size:0.88rem;}
+.qs-score{font-size:1.6rem;font-weight:800;line-height:1;margin:0.35rem 0 0.2rem;}
+.qs-label{font-size:0.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:0.08em;}
+.qs-bar-wrap{height:4px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;margin-top:0.5rem;}
+.qs-bar-fill{height:100%;border-radius:99px;}
+.qs-breakdown{font-size:0.68rem;color:var(--dim);margin-top:0.45rem;line-height:1.6;}
+/* Capital Allocation */
+.ca-excellent{color:#64ffda;font-weight:700;}
+.ca-good{color:#a8ff78;font-weight:700;}
+.ca-average{color:var(--yellow);font-weight:700;}
+.ca-poor{color:var(--red);font-weight:700;}
 /* Heat Map */
 .hmap-wrap{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;}
 .hmap-cell{display:flex;align-items:center;justify-content:center;border-radius:6px;font-family:monospace;font-weight:700;color:#fff;font-size:0.7rem;cursor:default;transition:transform 0.15s;position:relative;overflow:hidden;flex-direction:column;gap:2px;}
@@ -519,8 +543,19 @@ function main(){
       var v=(sh[q.t]||0)*(q.price||0);ranked.push({t:q.t,v:v});totalV+=v;
     });
     ranked.sort(function(a,b){return b.v-a.v;});
+    // Use value-weighted top 10 if shares are entered, otherwise use ALL holdings
+    // sorted by absolute day % so technical analysis always runs
     var topTk=ranked.filter(function(x){return x.v>0;}).slice(0,10).map(function(x){return x.t;});
-    if(topTk.length<3){topTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,10).map(function(q){return q.t;});}
+    if(topTk.length<3){
+      topTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);})
+        .slice(0,10).map(function(q){return q.t;});
+    }
+    // Still under 3? Just take the first 10 non-benchmark holdings directly
+    if(topTk.length<3){
+      topTk=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';})
+        .slice(0,10).map(function(h){return h.t;});
+    }
     var techTk=['SPY'].concat(topTk);
     var toTs=Math.floor(Date.now()/1000), fromTs=toTs-200*24*3600;
     var p3=Promise.resolve();
@@ -683,12 +718,19 @@ function main(){
   chain=chain.then(function(){
     setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
+    // Peer ranked list: value-weighted if shares entered, otherwise by day % or just first 10
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
+      .filter(function(x){return x.v>0;})
       .sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return x.t;});
     if(ranked.length<3){
       ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
-        .slice(0,8).map(function(q){return q.t;});
+        .sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);})
+        .slice(0,10).map(function(q){return q.t;});
+    }
+    if(ranked.length<3){
+      ranked=HOLDINGS.filter(function(h){return h.th!=='Benchmark'&&h.th!=='ETF';})
+        .slice(0,10).map(function(h){return h.t;});
     }
 
     var p9=Promise.resolve();
@@ -701,6 +743,12 @@ function main(){
           peerMap[tk].margin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
           peerMap[tk].grossMargin=d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null;
           peerMap[tk].peers=peerMap[tk].peers||[];
+          // Quality/allocation score inputs from ratios
+          peerMap[tk].operatingMargin=d.operatingProfitMarginTTM!=null?(d.operatingProfitMarginTTM*100):null;
+          peerMap[tk].roe=d.returnOnEquityTTM!=null?(d.returnOnEquityTTM*100):null;
+          peerMap[tk].debtRatio=d.debtRatioTTM||null;
+          peerMap[tk].fcfToSales=d.freeCashFlowOperatingCashFlowRatioTTM||null;
+          peerMap[tk].interestCoverage=d.interestCoverageTTM||null;
         }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,peers:[]};});
       }).then(function(){return slp(300);})
       .then(function(){
@@ -709,6 +757,13 @@ function main(){
           if(peerMap[tk]){
             peerMap[tk].evSales=d.evToSalesTTM||null;
             peerMap[tk].evEbitda=d.evToEBITDATTM||null;
+            // Quality score inputs
+            peerMap[tk].roic=d.roicTTM!=null?d.roicTTM*100:null;
+            peerMap[tk].fcfPerShare=d.freeCashFlowPerShareTTM||null;
+            peerMap[tk].debtToEquity=d.debtToEquityTTM||null;
+            peerMap[tk].earningsYield=d.earningsYieldTTM!=null?d.earningsYieldTTM*100:null;
+            peerMap[tk].dividendPerShare=d.dividendPerShareTTM||null;
+            peerMap[tk].payoutRatio=d.payoutRatioTTM!=null?d.payoutRatioTTM*100:null;
           }
         }).catch(function(){});
       }).then(function(){return slp(300);})
@@ -759,6 +814,38 @@ function main(){
       }).then(function(){return slp(300);});
     });
     return p9;
+  });
+
+  // Capital allocation: fetch cash flow statements for buyback/dilution data
+  chain=chain.then(function(){
+    setP(90,'Capital allocation data (FMP)...');
+    var caKeys=Object.keys(peerMap).slice(0,12); // limit to avoid rate limits
+    var pCA=Promise.resolve();
+    caKeys.forEach(function(tk){
+      pCA=pCA.then(function(){
+        return fmp('/cash-flow-statement?symbol='+tk+'&period=annual&limit=3').then(function(cf){
+          if(!cf||!cf.length)return;
+          var totalBuyback=0,totalDivPaid=0,totalSharesChg=0,validYears=0;
+          cf.forEach(function(yr){
+            if(yr.commonStockRepurchased!=null)totalBuyback+=Math.abs(yr.commonStockRepurchased);
+            if(yr.dividendsPaid!=null)totalDivPaid+=Math.abs(yr.dividendsPaid);
+            validYears++;
+          });
+          // Check share count change from first to last year (dilution/buyback)
+          if(cf.length>=2){
+            var shLatest=cf[0].commonStock||cf[0].sharesOutstanding||0;
+            var shOldest=cf[cf.length-1].commonStock||cf[cf.length-1].sharesOutstanding||0;
+            if(shOldest>0)totalSharesChg=(shLatest-shOldest)/shOldest*100;
+          }
+          peerMap[tk]=peerMap[tk]||{};
+          peerMap[tk].avgAnnualBuyback=validYears>0?totalBuyback/validYears:null;
+          peerMap[tk].avgAnnualDiv=validYears>0?totalDivPaid/validYears:null;
+          peerMap[tk].sharesChg3yr=totalSharesChg; // negative = buybacks reducing count
+          peerMap[tk].cfYears=validYears;
+        }).catch(function(){});
+      }).then(function(){return slp(300);});
+    });
+    return pCA;
   });
 
   chain=chain.then(function(){
@@ -929,6 +1016,177 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     html+='</div>';
   }
 
+  // ── QUALITY SCORE ─────────────────────────────────────────────────────────────
+  (function(){
+    // Score each holding 0-100 from available FMP metrics
+    // Points awarded across 6 dimensions (max ~17 pts each)
+    function qualityScore(tk){
+      var pm=peerMap[tk];
+      if(!pm)return null;
+      var score=0, maxPossible=0, breakdown=[];
+
+      // 1. ROIC (0-20 pts): >15% excellent, >10% good, >5% ok
+      if(pm.roic!=null){
+        maxPossible+=20;
+        var rPts=pm.roic>15?20:pm.roic>10?15:pm.roic>5?10:pm.roic>0?5:0;
+        score+=rPts;
+        breakdown.push('ROIC '+pm.roic.toFixed(1)+'% → '+rPts+'/20');
+      }
+      // 2. Operating Margin (0-20 pts): >25% excellent
+      if(pm.operatingMargin!=null){
+        maxPossible+=20;
+        var oPts=pm.operatingMargin>25?20:pm.operatingMargin>15?15:pm.operatingMargin>8?10:pm.operatingMargin>0?5:0;
+        score+=oPts;
+        breakdown.push('Op margin '+pm.operatingMargin.toFixed(1)+'% → '+oPts+'/20');
+      }
+      // 3. FCF Generation (0-15 pts): positive FCF per share
+      if(pm.fcfPerShare!=null){
+        maxPossible+=15;
+        var fPts=pm.fcfPerShare>5?15:pm.fcfPerShare>2?12:pm.fcfPerShare>0?8:pm.fcfPerShare>-2?3:0;
+        score+=fPts;
+        breakdown.push('FCF/sh $'+pm.fcfPerShare.toFixed(2)+' → '+fPts+'/15');
+      }
+      // 4. Debt (0-15 pts): lower is better
+      if(pm.debtToEquity!=null){
+        maxPossible+=15;
+        var dPts=pm.debtToEquity<0.3?15:pm.debtToEquity<0.7?12:pm.debtToEquity<1.5?8:pm.debtToEquity<3?4:0;
+        score+=dPts;
+        breakdown.push('D/E '+pm.debtToEquity.toFixed(2)+'x → '+dPts+'/15');
+      } else if(pm.debtRatio!=null){
+        maxPossible+=15;
+        var dPts2=pm.debtRatio<0.2?15:pm.debtRatio<0.4?12:pm.debtRatio<0.6?8:pm.debtRatio<0.8?4:0;
+        score+=dPts2;
+        breakdown.push('Debt ratio '+pm.debtRatio.toFixed(2)+' → '+dPts2+'/15');
+      }
+      // 5. Net Margin (0-15 pts)
+      if(pm.margin!=null){
+        maxPossible+=15;
+        var mPts=pm.margin>20?15:pm.margin>12?12:pm.margin>6?8:pm.margin>0?4:0;
+        score+=mPts;
+        breakdown.push('Net margin '+pm.margin.toFixed(1)+'% → '+mPts+'/15');
+      }
+      // 6. Analyst sentiment proxy: RSI as momentum confirmation (0-15 pts)
+      var tm=techMap[tk];
+      if(tm&&tm.rsi!=null){
+        maxPossible+=15;
+        // RSI 45-65 = healthy momentum, not overbought/oversold
+        var aPts=tm.rsi>45&&tm.rsi<65?15:tm.rsi>35&&tm.rsi<75?10:5;
+        score+=aPts;
+        breakdown.push('RSI '+tm.rsi.toFixed(0)+' → '+aPts+'/15');
+      }
+
+      if(maxPossible===0)return null;
+      var normalised=Math.round(score/maxPossible*100);
+      return{score:normalised,breakdown:breakdown,raw:score,max:maxPossible};
+    }
+
+    var qsItems=[];
+    Object.keys(peerMap).forEach(function(tk){
+      var qs=qualityScore(tk);
+      if(qs)qsItems.push({tk:tk,qs:qs});
+    });
+    qsItems.sort(function(a,b){return b.qs.score-a.qs.score;});
+
+    if(qsItems.length){
+      html+='<div class="section"><h3>Portfolio Quality Score <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(ROIC · operating margin · FCF · debt · net margin · momentum)</span></h3>';
+      html+='<div class="qs-wrap">';
+      qsItems.forEach(function(item){
+        var s=item.qs.score;
+        var col=s>=75?'var(--green)':s>=55?'#a8ff78':s>=40?'var(--yellow)':'var(--red)';
+        html+='<div class="qs-card">';
+        html+='<div class="qs-tk">'+item.tk+'</div>';
+        html+='<div class="qs-score" style="color:'+col+'">'+s+'<span style="font-size:0.9rem;color:var(--dim);font-weight:400;">/100</span></div>';
+        html+='<div class="qs-label">'+(s>=75?'High Quality':s>=55?'Good':s>=40?'Average':'Needs Review')+'</div>';
+        html+='<div class="qs-bar-wrap"><div class="qs-bar-fill" style="width:'+s+'%;background:'+col+'"></div></div>';
+        html+='<div class="qs-breakdown">'+item.qs.breakdown.join('<br>')+'</div>';
+        html+='</div>';
+      });
+      html+='</div></div>';
+    }
+  })();
+
+  // ── CAPITAL ALLOCATION SCORE ───────────────────────────────────────────────
+  (function(){
+    function caScore(tk){
+      var pm=peerMap[tk];
+      if(!pm)return null;
+      var pts=0, total=0, details=[];
+
+      // 1. Share count trend (0-25 pts): buybacks reduce share count = good
+      if(pm.sharesChg3yr!=null){
+        total+=25;
+        var sPts=pm.sharesChg3yr<-5?25:pm.sharesChg3yr<-2?20:pm.sharesChg3yr<0?15:pm.sharesChg3yr<2?8:0;
+        pts+=sPts;
+        details.push('Share chg 3yr: '+(pm.sharesChg3yr>=0?'+':'')+pm.sharesChg3yr.toFixed(1)+'%');
+      }
+      // 2. ROIC vs cost of capital proxy (0-25 pts)
+      if(pm.roic!=null){
+        total+=25;
+        var rPts=pm.roic>20?25:pm.roic>12?20:pm.roic>8?14:pm.roic>4?8:0;
+        pts+=rPts;
+        details.push('ROIC: '+pm.roic.toFixed(1)+'%');
+      }
+      // 3. FCF conversion (0-20 pts): strong FCF = good allocation options
+      if(pm.fcfPerShare!=null&&pm.fcfPerShare>0){
+        total+=20;
+        var fPts=pm.fcfPerShare>8?20:pm.fcfPerShare>4?16:pm.fcfPerShare>1?10:5;
+        pts+=fPts;
+        details.push('FCF/sh: $'+pm.fcfPerShare.toFixed(2));
+      }
+      // 4. Dividend sustainability (0-15 pts)
+      if(pm.payoutRatio!=null){
+        total+=15;
+        // 20-50% payout ratio ideal; 0% ok (growth); >80% risky
+        var dPts=pm.payoutRatio===0?12:pm.payoutRatio<50?15:pm.payoutRatio<70?10:pm.payoutRatio<85?5:0;
+        pts+=dPts;
+        details.push('Payout ratio: '+pm.payoutRatio.toFixed(0)+'%');
+      }
+      // 5. Debt discipline (0-15 pts)
+      if(pm.debtToEquity!=null){
+        total+=15;
+        var d2Pts=pm.debtToEquity<0.5?15:pm.debtToEquity<1?12:pm.debtToEquity<2?7:pm.debtToEquity<4?3:0;
+        pts+=d2Pts;
+        details.push('D/E: '+pm.debtToEquity.toFixed(2)+'x');
+      }
+
+      if(total===0)return null;
+      var pct=pts/total*100;
+      var rating=pct>=75?'Excellent':pct>=55?'Good':pct>=35?'Average':'Poor';
+      return{rating:rating,pct:pct,details:details};
+    }
+
+    var caItems=[];
+    Object.keys(peerMap).forEach(function(tk){
+      var ca=caScore(tk);
+      if(ca)caItems.push({tk:tk,ca:ca});
+    });
+    var order={Excellent:0,Good:1,Average:2,Poor:3};
+    caItems.sort(function(a,b){return order[a.ca.rating]-order[b.ca.rating]||b.ca.pct-a.ca.pct;});
+
+    if(caItems.length){
+      html+='<div class="section"><h3>Capital Allocation Score <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(buybacks · ROIC · FCF · dividends · debt discipline)</span></h3>';
+      html+='<div style="overflow-x:auto"><table class="htable"><thead><tr>';
+      html+='<th>Ticker</th><th>Rating</th><th class="r">ROIC</th><th class="r">FCF/sh</th><th class="r">D/E</th><th class="r">Payout</th><th class="r">Share Δ 3yr</th><th>Notes</th>';
+      html+='</tr></thead><tbody>';
+      caItems.forEach(function(item){
+        var pm=peerMap[item.tk];
+        var rc='ca-'+item.ca.rating.toLowerCase();
+        html+='<tr>';
+        html+='<td class="tk">'+item.tk+'</td>';
+        html+='<td><span class="'+rc+'">'+item.ca.rating+'</span></td>';
+        html+='<td class="r">'+(pm.roic!=null?pm.roic.toFixed(1)+'%':'<span class="na">--</span>')+'</td>';
+        html+='<td class="r">'+(pm.fcfPerShare!=null?'$'+pm.fcfPerShare.toFixed(2):'<span class="na">--</span>')+'</td>';
+        html+='<td class="r">'+(pm.debtToEquity!=null?pm.debtToEquity.toFixed(2)+'x':'<span class="na">--</span>')+'</td>';
+        html+='<td class="r">'+(pm.payoutRatio!=null?pm.payoutRatio.toFixed(0)+'%':'<span class="na">--</span>')+'</td>';
+        var shChg=pm.sharesChg3yr;
+        html+='<td class="r">'+(shChg!=null?'<span class="'+(shChg<0?'up':'dn')+'">'+(shChg>=0?'+':'')+shChg.toFixed(1)+'%</span>':'<span class="na">--</span>')+'</td>';
+        html+='<td style="font-size:0.72rem;color:var(--dim);">'+item.ca.details.join(' · ')+'</td>';
+        html+='</tr>';
+      });
+      html+='</tbody></table></div></div>';
+    }
+  })();
+
   // ── PORTFOLIO HEAT MAP ──────────────────────────────────────────────────────
   (function(){
     var hmItems=valid.filter(function(q){return q.price!=null;}).map(function(q){
@@ -953,6 +1211,130 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
         html+='<div class="hmap-cell" style="width:'+sz+'px;height:'+sz+'px;background:'+bg+'" title="'+item.t+': '+(p>=0?'+':'')+p.toFixed(2)+'%">';
         html+='<span class="hmap-tk">'+item.t+'</span>';
         if(sz>=60)html+='<span class="hmap-pct">'+(p>=0?'+':'')+p.toFixed(1)+'%</span>';
+        html+='</div>';
+      });
+      html+='</div></div>';
+    }
+  })();
+
+  // ── FRESH CAPITAL: TOP 3 ADD CANDIDATES ─────────────────────────────────────
+  (function(){
+    // Score every non-benchmark holding across five dimensions.
+    // All data is already in memory — no new fetches needed.
+    var candidates=[];
+
+    valid.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF';}).forEach(function(q){
+      var tk=q.t;
+      var tm=techMap[tk];
+      var pm=peerMap[tk];
+      var pt=targetMap[tk];
+      var wt=wm[tk]?wm[tk].pct:0;
+      var score=0;
+      var reasons=[];
+      var metrics=[];
+
+      // 1. ANALYST UPSIDE (0-30 pts)
+      var upside=null;
+      if(pt&&q.price&&pt.mean>0){
+        upside=(pt.mean-q.price)/q.price*100;
+        var uPts=upside>25?30:upside>15?22:upside>8?14:upside>3?7:upside>0?3:0;
+        score+=uPts;
+        metrics.push({label:'Upside',val:(upside>=0?'+':'')+upside.toFixed(1)+'%'});
+        if(upside>15)reasons.push('analyst consensus sees '+upside.toFixed(0)+'% upside to $'+pt.mean.toFixed(0));
+      }
+
+      // 2. TECHNICAL SIGNAL (0-25 pts)
+      if(tm){
+        var sigPts={'STRONG BUY':25,'BUY':18,'HOLD':8,'WEAK':3,'SELL':0,'N/A':5};
+        var tPts=sigPts[tm.sig]||5;
+        score+=tPts;
+        metrics.push({label:'Signal',val:tm.sig});
+        if(tm.sig==='STRONG BUY'||tm.sig==='BUY'){
+          var techDetail=tm.trend;
+          if(tm.rsi!=null)techDetail+=' RSI '+tm.rsi.toFixed(0);
+          reasons.push('technical setup is '+tm.sig+' ('+techDetail+')');
+        }
+        // Bonus for RS30 outperformance
+        if(tm.a30!=null&&tm.a30>3){score+=5;reasons.push('outperforming SPY by '+tm.a30.toFixed(1)+'% over 30 days');}
+      }
+
+      // 3. QUALITY SCORE (0-25 pts)
+      if(pm){
+        var qs=0,qMax=0;
+        if(pm.roic!=null){qMax+=20;qs+=pm.roic>15?20:pm.roic>10?15:pm.roic>5?10:pm.roic>0?5:0;}
+        if(pm.operatingMargin!=null){qMax+=20;qs+=pm.operatingMargin>25?20:pm.operatingMargin>15?15:pm.operatingMargin>8?10:pm.operatingMargin>0?5:0;}
+        if(pm.fcfPerShare!=null){qMax+=15;qs+=pm.fcfPerShare>5?15:pm.fcfPerShare>2?12:pm.fcfPerShare>0?8:0;}
+        if(pm.margin!=null){qMax+=15;qs+=pm.margin>20?15:pm.margin>12?12:pm.margin>6?8:pm.margin>0?4:0;}
+        if(qMax>0){
+          var qNorm=qs/qMax*100;
+          var qPts=qNorm>=75?25:qNorm>=55?18:qNorm>=40?10:5;
+          score+=qPts;
+          if(pm.roic!=null)metrics.push({label:'ROIC',val:pm.roic.toFixed(1)+'%'});
+          if(qNorm>=75)reasons.push('high-quality business (ROIC '+(pm.roic!=null?pm.roic.toFixed(1)+'%':'strong')+', operating margin '+(pm.operatingMargin!=null?pm.operatingMargin.toFixed(1)+'%':'healthy')+')');
+        }
+      }
+
+      // 4. VALUATION CUSHION (0-15 pts): lower EV/EBITDA relative to sector
+      if(pm&&pm.evEbitda!=null){
+        var vPts=pm.evEbitda<10?15:pm.evEbitda<16?12:pm.evEbitda<22?8:pm.evEbitda<30?4:0;
+        score+=vPts;
+        metrics.push({label:'EV/EBITDA',val:pm.evEbitda.toFixed(1)+'x'});
+        if(pm.evEbitda<14)reasons.push('trades at only '+pm.evEbitda.toFixed(1)+'x EV/EBITDA — reasonable valuation');
+      }
+
+      // 5. POSITION SIZE OPPORTUNITY (0-10 pts): underweight relative to conviction
+      // A holding with low weight but high quality/upside deserves a top-up
+      if(wt<3&&score>30){score+=10;reasons.push('currently a small position ('+wt.toFixed(1)+'% weight) with room to add');}
+      else if(wt<6&&score>40){score+=5;}
+
+      // Only include holdings with enough data to be meaningful
+      var dataPoints=(upside!=null?1:0)+(tm?1:0)+(pm&&pm.roic!=null?1:0);
+      if(dataPoints<2)return;
+
+      candidates.push({
+        tk:tk,
+        th:q.th,
+        score:score,
+        upside:upside,
+        tm:tm,
+        pm:pm,
+        wt:wt,
+        price:q.price,
+        target:pt?pt.mean:null,
+        reasons:reasons,
+        metrics:metrics
+      });
+    });
+
+    // Sort by composite score, take top 3
+    candidates.sort(function(a,b){return b.score-a.score;});
+    var top3=candidates.slice(0,3);
+
+    if(top3.length){
+      var rankLabels=['#1 Top Pick','#2 Runner-Up','#3 Third Choice'];
+      html+='<div class="section" style="border-color:rgba(100,255,218,0.3)"><h3>Fresh Capital: Top 3 Add Candidates <span style="font-size:0.65rem;color:var(--dim);font-weight:400;">(analyst upside · technicals · quality · valuation · position size)</span></h3>';
+      html+='<div class="fc-wrap">';
+      top3.forEach(function(c,i){
+        html+='<div class="fc-card">';
+        html+='<div class="fc-rank">'+rankLabels[i]+'</div>';
+        html+='<div><span class="fc-tk">'+c.tk+'</span><span class="fc-theme">'+c.th+'</span></div>';
+        html+='<div class="fc-metrics">';
+        c.metrics.forEach(function(m){
+          html+='<div class="fc-metric">'+m.label+': <span>'+m.val+'</span></div>';
+        });
+        if(c.wt>0)html+='<div class="fc-metric">Weight: <span>'+c.wt.toFixed(1)+'%</span></div>';
+        if(c.price)html+='<div class="fc-metric">Price: <span>$'+c.price.toFixed(2)+'</span></div>';
+        if(c.target)html+='<div class="fc-metric">Target: <span>$'+c.target.toFixed(0)+'</span></div>';
+        html+='</div>';
+        if(c.reasons.length){
+          html+='<div class="fc-reason">The case for adding: ';
+          // Capitalise first reason
+          var first=c.reasons[0];
+          html+=first.charAt(0).toUpperCase()+first.slice(1);
+          if(c.reasons.length>1)html+='; '+c.reasons.slice(1).join('; ');
+          html+='.';
+          html+='</div>';
+        }
         html+='</div>';
       });
       html+='</div></div>';
@@ -1252,6 +1634,48 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
   var alertStr=alerts.length?alerts.map(function(a){return a.t+': '+a.reason;}).join('\n'):'none';
   var analStr=Object.keys(analystMap).map(function(t){var v=analystMap[t],pt=targetMap[t];return t+': '+v.buy+'B/'+v.hold+'H/'+v.sell+'S'+(pt?' tgt:$'+pt.mean.toFixed(0):'');}).join('\n')||'none';
+  // Quality and capital allocation summaries for AI prompt
+  // Build fresh capital summary for AI prompt
+  // We re-run the scoring inline here so the string is always populated
+  var freshCapStr=(function(){
+    var lines=[];
+    var scored=[];
+    valid.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF';}).forEach(function(q){
+      var tk=q.t,tm=techMap[tk],pm=peerMap[tk],pt=targetMap[tk],wt=wm[tk]?wm[tk].pct:0;
+      var sc=0;
+      if(pt&&q.price&&pt.mean>0){var up=(pt.mean-q.price)/q.price*100;sc+=up>25?30:up>15?22:up>8?14:up>3?7:0;}
+      if(tm){var sp={'STRONG BUY':25,'BUY':18,'HOLD':8,'WEAK':3,'SELL':0,'N/A':5};sc+=sp[tm.sig]||5;if(tm.a30>3)sc+=5;}
+      if(pm&&pm.roic!=null){sc+=pm.roic>15?15:pm.roic>10?10:pm.roic>5?6:0;}
+      if(pm&&pm.evEbitda!=null){sc+=pm.evEbitda<10?15:pm.evEbitda<16?12:pm.evEbitda<22?8:0;}
+      if(wt<3&&sc>30)sc+=10;
+      scored.push({tk:tk,sc:sc,wt:wt,upside:pt&&q.price?((pt.mean-q.price)/q.price*100):null,sig:tm?tm.sig:'N/A',roic:pm?pm.roic:null,evEbitda:pm?pm.evEbitda:null});
+    });
+    scored.sort(function(a,b){return b.sc-a.sc;});
+    scored.slice(0,3).forEach(function(x,i){
+      var s=(i+1)+'. '+x.tk+' (score '+x.sc+')';
+      if(x.upside!=null)s+=' upside '+(x.upside>=0?'+':'')+x.upside.toFixed(1)+'%';
+      if(x.sig!=='N/A')s+=' signal '+x.sig;
+      if(x.roic!=null)s+=' ROIC '+x.roic.toFixed(1)+'%';
+      if(x.evEbitda!=null)s+=' EV/EBITDA '+x.evEbitda.toFixed(1)+'x';
+      s+=' current weight '+x.wt.toFixed(1)+'%';
+      lines.push(s);
+    });
+    return lines.join('\n')||'Insufficient data to rank';
+  })();
+
+  var qualStr=Object.keys(peerMap).map(function(tk){
+    var pm=peerMap[tk];
+    if(!pm)return null;
+    var parts=[tk+':'];
+    if(pm.roic!=null)parts.push('ROIC '+pm.roic.toFixed(1)+'%');
+    if(pm.operatingMargin!=null)parts.push('OpMgn '+pm.operatingMargin.toFixed(1)+'%');
+    if(pm.fcfPerShare!=null)parts.push('FCF/sh $'+pm.fcfPerShare.toFixed(2));
+    if(pm.debtToEquity!=null)parts.push('D/E '+pm.debtToEquity.toFixed(2)+'x');
+    if(pm.sharesChg3yr!=null)parts.push('shares 3yr '+(pm.sharesChg3yr>=0?'+':'')+pm.sharesChg3yr.toFixed(1)+'%');
+    if(pm.payoutRatio!=null)parts.push('payout '+pm.payoutRatio.toFixed(0)+'%');
+    return parts.length>1?parts.join(' '):null;
+  }).filter(Boolean).join('\n')||'none';
+
   var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'');}).join('\n')||'none';
 
   var isDecision=(document.getElementById('mode-sel').value==='decision');
@@ -1261,15 +1685,15 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'RULES: Do NOT mention insider trading or Form 4 filings under any circumstances. Every paragraph must name specific tickers and cite specific numbers. NEVER write sentences saying data is unavailable, insufficient, not provided, or that analysis must rely on contextual intelligence due to data gaps — if a specific number is missing, reason from what IS available (technicals, margins, sector trends, recent price action) and write with confidence.\n\n'
     +'Cover in order:\n'
     +'1. MARKET OVERVIEW: Portfolio vs SPY/QQQ. Value if available.\n'
-    +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers.\n'
+    +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers. Where relevant note if the mover has a high or low quality score.\n'
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
     +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
     +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E, forward P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers.\n'
     +'6. EARNINGS QUALITY AND PREVIEW: The EPS section below contains data for every holding in one of three forms: (a) Finnhub surprise data with actual vs estimate and beat/miss streaks, (b) FMP-derived TTM EPS and YoY growth, or (c) profitability proxies (net margin, gross margin, EV/EBITDA, P/E) mined from the peer comparison data. You always have something to work with. Use whichever data is present to assess earnings quality — consistent beaters, margin trajectory, valuation relative to earnings power. ABSOLUTE RULE: do not write any sentence stating that EPS data, surprise history, or consensus estimates were not provided — they are always provided in some form. For upcoming reports in the next 90 days, discuss expected EPS and revenue where available, what a beat or miss means for the stock's technical setup, and which reports represent the greatest portfolio risk.\n'
-    +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
-    +'8. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
-    +'9. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing.\n'
-    +'10. FORWARD LOOK: Upcoming earnings and near-term outlook.\n\n'
+    +'7. PORTFOLIO QUALITY AND CAPITAL ALLOCATION: Using the quality scores and capital allocation data provided, identify the highest and lowest quality holdings. Call out any holdings rated Poor on capital allocation and explain the concern. Contrast with the top-rated holdings and what earns them their rating.\n'+'8. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
+    +'9. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
+    +'10. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing.\n'
+    +'11. FRESH CAPITAL: Using the pre-scored Top 3 Add Candidates provided, write one specific paragraph per candidate explaining why it earns its ranking today, what the entry case is, and what would change your mind. Name price targets and key technical levels.\n'+'12. FORWARD LOOK: Upcoming earnings and near-term outlook.\n\n'
     +'DATA:\n'
     +'Portfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\n'
     +'Value: '+totalFmt+'\nTop positions: '+topPos+'\n\n'
@@ -1283,7 +1707,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   else if(ep.yoyGr!=null)s+=' YoY EPS chg(TTM): '+(ep.yoyGr>=0?'+':'')+ep.yoyGr.toFixed(1)+'%';
   if(ep.derivedFromTTM)s+=' [TTM-derived, no consensus]';
   return s;
-}).join('\n')||'none'+'\n\nWrite the complete brief now.';
+}).join('\n')||'none'+'\n\nQuality and Capital Allocation data:\n'+qualStr+'\n\nFresh Capital Top 3 Add Candidates (pre-scored):\n'+freshCapStr+'\n\nWrite the complete brief now.';
 
   // DEBUG: log exactly what Claude receives for EPS
   console.log('=== EPS STRING SENT TO CLAUDE ===');
