@@ -260,9 +260,25 @@ function fhub(path,retries){
   return fetch('https://finnhub.io/api/v1'+path+'&token='+finKey)
     .then(function(r){
       if(r.status===429&&retries<2)return slp(5000).then(function(){return fhub(path,retries+1);});
-      if(!r.ok)throw new Error('Finnhub '+r.status);
+      if(r.status===401)throw new Error('Finnhub 401: invalid API key');
+      if(r.status===403)throw new Error('Finnhub 403: key lacks permission for this endpoint');
+      if(!r.ok)throw new Error('Finnhub '+r.status+' on '+path);
       return r.json();
     });
+}
+
+function fmpOk(path){
+  // Same as fmp() but never throws — returns null on any error
+  var base='https://financialmodelingprep.com/stable';
+  var sep=path.indexOf('?')>=0?'&':'?';
+  var url=base+path+sep+'apikey='+fmpKey;
+  return fetch(url)
+    .then(function(r){
+      if(r.status===401||r.status===403){console.warn('FMP auth error on '+path);return null;}
+      if(!r.ok){console.warn('FMP '+r.status+' on '+path);return null;}
+      return r.json();
+    })
+    .catch(function(e){console.warn('FMP fetch failed:',e.message,path);return null;});
 }
 
 function calcSMA(a,n){if(!a||a.length<n)return null;var s=0,i;for(i=a.length-n;i<a.length;i++)s+=a[i];return s/n;}
@@ -444,13 +460,26 @@ function main(){
 
   setP(2,'Fetching quotes...');
 
+  var apiErrors=[];
   function fetchBatch(batch){
     return Promise.allSettled(batch.map(function(h){return fhub('/quote?symbol='+h.t);}))
       .then(function(results){
         results.forEach(function(res,i){
           var h=batch[i];
-          if(res.status==='fulfilled'){var q=res.value;qdata.push({t:h.t,th:h.th,price:q.c||null,change:q.d||null,pct:q.dp||null,high:q.h||null,low:q.l||null});}
-          else{fails.push(h.t);qdata.push({t:h.t,th:h.th,price:null,change:null,pct:null,high:null,low:null});}
+          if(res.status==='fulfilled'){
+            var q=res.value;
+            // Finnhub returns {} with no fields on bad key — detect this
+            if(q.c==null&&q.d==null&&q.dp==null&&Object.keys(q).length<3){
+              if(apiErrors.indexOf('Finnhub: key may be invalid or market closed')<0)
+                apiErrors.push('Finnhub: key may be invalid or market closed');
+            }
+            qdata.push({t:h.t,th:h.th,price:q.c||null,change:q.d||null,pct:q.dp||null,high:q.h||null,low:q.l||null});
+          } else {
+            var msg=res.reason?res.reason.message:'unknown error';
+            if(apiErrors.indexOf('Finnhub: '+msg)<0)apiErrors.push('Finnhub: '+msg);
+            fails.push(h.t);
+            qdata.push({t:h.t,th:h.th,price:null,change:null,pct:null,high:null,low:null});
+          }
         });
       });
   }
@@ -829,7 +858,8 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
   var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;"><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="window.openHoldingsManager()">[H] Holdings</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
-  if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
+  if(apiErrors.length)html+='<div class="warn" style="border-color:rgba(255,100,100,0.5)"><strong>API Errors detected:</strong> '+apiErrors.join(' | ')+'<br><small>Check your API keys and browser console (F12) for details.</small></div>';
+  if(fails.length)html+='<div class="warn">Tickers with no quote data: '+fails.join(', ')+'</div>';
 
   html+='<div class="scorecard">';
   html+='<div class="sc"><div class="sc-label">Portfolio Avg</div><div class="sc-val '+(avgPct>=0?'up':'dn')+'">'+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'%</div><div class="sc-sub">'+gainCount+' up / '+lossCount+' dn</div></div>';
@@ -1308,7 +1338,7 @@ document.addEventListener('DOMContentLoaded',function(){
     var err=document.getElementById('errmsg');
     if(!antKey||antKey.indexOf('sk-ant')!==0){err.textContent='Please enter a valid Anthropic API key.';err.style.display='block';return;}
     if(!finKey){err.textContent='Please enter your Finnhub API key.';err.style.display='block';return;}
-    if(!fmpKey||fmpKey.length<20){err.textContent='Please enter your FMP API key.';err.style.display='block';return;}
+    if(!fmpKey||fmpKey.length<8){err.textContent='Please enter your FMP API key.';err.style.display='block';return;}
     err.style.display='none';
     saveKeys(antKey,finKey,fmpKey);
     document.getElementById('overlay').style.display='none';
