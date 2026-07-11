@@ -1678,6 +1678,105 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
 
   var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'');}).join('\n')||'none';
 
+  // ── PRE-WRITE EPS ANALYSIS so Claude cannot claim data is missing ────────────
+  // We generate factual sentences from available data. Claude continues from these.
+  var preWrittenEps=(function(){
+    var sentences=[];
+
+    // Sentence from Finnhub surprise data
+    var finnhubEntries=Object.keys(epsMap).filter(function(t){
+      return epsMap[t].source==='finnhub'&&epsMap[t].surpPct!=null;
+    });
+    if(finnhubEntries.length){
+      var beats=finnhubEntries.filter(function(t){return epsMap[t].surpPct>=0;});
+      var misses=finnhubEntries.filter(function(t){return epsMap[t].surpPct<0;});
+      var bigBeats=finnhubEntries.filter(function(t){return epsMap[t].surpPct>5;})
+        .sort(function(a,b){return epsMap[b].surpPct-epsMap[a].surpPct;}).slice(0,2);
+      var s='Of the '+finnhubEntries.length+' holdings with recent EPS data, '
+        +beats.length+' beat estimates and '+misses.length+' missed.';
+      if(bigBeats.length){
+        s+=' The strongest recent beats were '+bigBeats.map(function(t){
+          return t+' (+'+(epsMap[t].surpPct).toFixed(1)+'%)';
+        }).join(' and ')+'.';
+      }
+      // Beat streaks
+      var streakers=finnhubEntries.filter(function(t){return epsMap[t].beatStreak>2;});
+      if(streakers.length){
+        s+=' '+streakers.map(function(t){
+          return t+' has beaten estimates in '+epsMap[t].beatStreak+' consecutive quarters';
+        }).join('; ')+'.';
+      }
+      sentences.push(s);
+    }
+
+    // Sentence from peerMap profitability data (always available if FMP working)
+    var profEntries=Object.keys(peerMap).filter(function(tk){
+      return peerMap[tk]&&(peerMap[tk].margin!=null||peerMap[tk].operatingMargin!=null);
+    });
+    if(profEntries.length){
+      var highMargin=profEntries.filter(function(tk){
+        return peerMap[tk].operatingMargin!=null&&peerMap[tk].operatingMargin>20;
+      }).sort(function(a,b){
+        return (peerMap[b].operatingMargin||0)-(peerMap[a].operatingMargin||0);
+      }).slice(0,3);
+      var lowMargin=profEntries.filter(function(tk){
+        return peerMap[tk].operatingMargin!=null&&peerMap[tk].operatingMargin<5;
+      }).slice(0,2);
+      var s2='Profitability data is available for '+profEntries.length+' holdings.';
+      if(highMargin.length){
+        s2+=' Highest operating margins: '+highMargin.map(function(tk){
+          return tk+' ('+peerMap[tk].operatingMargin.toFixed(1)+'%)';
+        }).join(', ')+'.';
+      }
+      if(lowMargin.length){
+        s2+=' Holdings with compressed operating margins below 5%: '
+          +lowMargin.map(function(tk){
+            return tk+' ('+peerMap[tk].operatingMargin.toFixed(1)+'%)';
+          }).join(', ')+'.';
+      }
+      sentences.push(s2);
+    }
+
+    // Sentence from upcoming earnings calendar
+    var upcoming=Object.keys(earningsMap).filter(function(t){
+      var d=new Date(earningsMap[t]);
+      return d>new Date()&&(d-new Date())<90*24*3600*1000;
+    }).sort(function(a,b){
+      return new Date(earningsMap[a])-new Date(earningsMap[b]);
+    });
+    if(upcoming.length){
+      var withEst=upcoming.filter(function(t){
+        return earnPreviewMap[t]&&earnPreviewMap[t].epsEst!=null;
+      });
+      var s3='The upcoming earnings calendar includes '+upcoming.length
+        +' portfolio holdings: '+upcoming.slice(0,6).map(function(t){
+          var ep=earnPreviewMap[t];
+          var est=ep&&ep.epsEst!=null?' (est. $'+ep.epsEst.toFixed(2)+')':
+                 ep&&ep.ttmEps!=null?' (TTM $'+ep.ttmEps.toFixed(2)+')':'';
+          return t+' ('+earningsMap[t]+est+')';
+        }).join(', ')+(upcoming.length>6?' and '+(upcoming.length-6)+' more':'')+'.';
+      if(withEst.length){
+        s3+=' Analyst consensus estimates are available for '+withEst.length+' of them.';
+      }
+      sentences.push(s3);
+    }
+
+    // If we have nothing at all, use technicals as proxy
+    if(!sentences.length){
+      var techEntries=Object.keys(techMap).filter(function(t){return t!=='SPY';});
+      if(techEntries.length){
+        sentences.push('While direct EPS data is limited today, technical signals '
+          +'are available for '+techEntries.length+' holdings: '
+          +techEntries.slice(0,4).map(function(t){
+            var v=techMap[t];
+            return t+' ('+v.sig+', RSI '+v.rsi.toFixed(0)+')';
+          }).join(', ')+'.');
+      }
+    }
+
+    return sentences.join(' ');
+  })();
+
   var isDecision=(document.getElementById('mode-sel').value==='decision');
   var prompt=isDecision
     ? 'You are a seasoned portfolio manager reviewing your own portfolio at close of market. Answer ONLY these three questions in flowing prose, one paragraph each, separated by ---. Be specific: name tickers and cite numbers.\n\n1. WHAT GENUINELY MATTERS TODAY? Of everything that moved or was reported today, what actually changes the long-term picture for any holding? Ignore noise.\n\n2. HAS MY INVESTMENT CASE CHANGED? For any holding where something happened today — earnings, guidance, macro, competitive news — has the original reason for owning it strengthened, weakened, or held steady? Name the holding and explain.\n\n3. WHERE WOULD I ADD CAPITAL? If I had fresh money today, which three holdings represent the best risk/reward given current positioning, valuation, and momentum? Rank them and explain briefly.\n\nDATA:\nPortfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\nTop movers: '+sorted.slice(0,5).map(function(q){return q.t+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%';}).join(', ')+'\nBottom: '+sorted.slice(-3).reverse().map(function(q){return q.t+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%';}).join(', ')+'\nAlerts: '+alertStr+'\nTechnical: '+techStr+'\nNews: '+newsStr+'\n\nWrite the three-paragraph decision brief now.'
@@ -1689,7 +1788,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
     +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
     +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E, forward P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers.\n'
-    +'6. EARNINGS QUALITY AND PREVIEW: The EPS section below contains data for every holding in one of three forms: (a) Finnhub surprise data with actual vs estimate and beat/miss streaks, (b) FMP-derived TTM EPS and YoY growth, or (c) profitability proxies (net margin, gross margin, EV/EBITDA, P/E) mined from the peer comparison data. You always have something to work with. Use whichever data is present to assess earnings quality — consistent beaters, margin trajectory, valuation relative to earnings power. ABSOLUTE RULE: do not write any sentence stating that EPS data, surprise history, or consensus estimates were not provided — they are always provided in some form. For upcoming reports in the next 90 days, discuss expected EPS and revenue where available, what a beat or miss means for the stock's technical setup, and which reports represent the greatest portfolio risk.\n'
+    +'6. EARNINGS QUALITY AND PREVIEW: Continue naturally from this already-written opening — do NOT repeat it, just deepen the analysis from it: \''+preWrittenEps+'\' Add specific analysis of which holdings are best-positioned heading into their next report based on margin trends, technical setup, and valuation. Name at least four specific tickers with numbers.\n'
     +'7. PORTFOLIO QUALITY AND CAPITAL ALLOCATION: Using the quality scores and capital allocation data provided, identify the highest and lowest quality holdings. Call out any holdings rated Poor on capital allocation and explain the concern. Contrast with the top-rated holdings and what earns them their rating.\n'+'8. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
     +'9. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
     +'10. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing.\n'
