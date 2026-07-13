@@ -23,7 +23,6 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 #genbtn:hover{opacity:0.9;}
 #errmsg{color:var(--red);font-size:0.82rem;margin-top:0.7rem;display:none;}
 #clearbtn{background:none;border:none;color:var(--dim);font-size:0.75rem;cursor:pointer;text-decoration:underline;margin-top:0.5rem;display:block;}
-#manage-holdings-btn{width:100%;background:none;border:1px solid var(--border);color:var(--green);border-radius:6px;padding:0.6rem;font-size:0.82rem;cursor:pointer;margin-top:0.8rem;}
 #progress{display:none;padding:3rem 2rem;text-align:center;}
 .pb-wrap{background:rgba(255,255,255,0.08);border-radius:99px;height:6px;width:320px;margin:1.2rem auto 0.8rem;overflow:hidden;}
 .pb-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--green));border-radius:99px;transition:width 0.4s;width:0%;}
@@ -96,24 +95,6 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 .arch-prev{font-size:0.83rem;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .arch-btn{background:transparent;border:none;color:var(--green);font-size:0.75rem;cursor:pointer;padding:0.2rem 0;display:block;}
 .arch-full{display:none;font-size:0.83rem;color:var(--text);margin-top:0.4rem;}
-#hmodal-overlay{display:none;position:fixed;inset:0;background:rgba(10,10,20,0.88);z-index:2000;align-items:center;justify-content:center;}
-#hmodal-box{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:1.8rem 2rem;width:560px;max-width:95vw;max-height:85vh;overflow-y:auto;}
-#hmodal-box h2{color:var(--white);font-size:1.15rem;margin-bottom:0.3rem;}
-#hmodal-box>p{color:var(--dim);font-size:0.8rem;margin-bottom:1rem;}
-.hm-add-row{display:flex;gap:0.5rem;margin-bottom:0.4rem;}
-.hm-add-row input{background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.5rem 0.7rem;font-size:0.85rem;}
-#hm-ticker{width:90px;font-family:monospace;text-transform:uppercase;}
-#hm-theme{flex:1;}
-#hm-add-btn{background:rgba(100,255,218,0.1);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:0.5rem 1rem;font-size:0.85rem;cursor:pointer;font-weight:600;white-space:nowrap;}
-#hm-err{color:var(--red);font-size:0.78rem;display:none;margin-bottom:0.5rem;}
-#hm-note{color:var(--yellow);font-size:0.78rem;display:none;margin-bottom:0.5rem;}
-#hm-list{max-height:340px;overflow-y:auto;border-top:1px solid var(--border);margin-top:0.6rem;}
-.hm-row{display:flex;align-items:center;gap:0.6rem;padding:0.45rem 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:0.82rem;}
-.hm-row-tk{font-family:monospace;font-weight:700;min-width:60px;color:var(--white);}
-.hm-row-sh{color:var(--dim);flex:1;text-align:right;font-family:monospace;font-size:0.78rem;}
-.hm-rm{background:none;border:none;color:var(--dim);cursor:pointer;font-size:1rem;padding:0 0.2rem;}
-.hm-rm:hover{color:var(--red);}
-#hm-close-btn{background:transparent;border:1px solid var(--border);color:var(--text);border-radius:6px;padding:0.5rem 1.1rem;font-size:0.82rem;cursor:pointer;}
 @media print{#overlay,#progress,.rbtn{display:none!important;}body{background:#fff;color:#000;}.section{border:1px solid #ddd;background:#fff;}#report{display:block!important;}}
 @media(max-width:640px){.scorecard{grid-template-columns:repeat(2,1fr);}.hm{display:none;}#report{padding:1rem 0.75rem 3rem;}}
 </style>
@@ -129,7 +110,6 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
     <div class="fl"><label>Mode</label><select id="mode-sel"><option value="full">Full Brief</option><option value="quick">Quick Brief</option></select></div>
     <div id="errmsg"></div>
     <button id="genbtn">Generate Brief</button>
-    <button id="manage-holdings-btn" onclick="window.openHoldingsManager()">Manage Holdings</button>
     <button id="clearbtn">Clear saved keys</button>
   </div>
 </div>
@@ -139,31 +119,11 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
   <div id="plabel">Initialising...</div>
 </div>
 <div id="report"></div>
-
-<div id="hmodal-overlay">
-  <div id="hmodal-box">
-    <h2>Manage Holdings</h2>
-    <p>Add new positions or remove holdings you've sold. Changes are saved immediately and included in Export/Import.</p>
-    <div class="hm-add-row">
-      <input id="hm-ticker" placeholder="Ticker">
-      <input id="hm-theme" placeholder="Theme (e.g. Financials)" list="hm-theme-list">
-      <datalist id="hm-theme-list"></datalist>
-      <button id="hm-add-btn">+ Add</button>
-    </div>
-    <div id="hm-err"></div>
-    <div id="hm-note"></div>
-    <div id="hm-list"></div>
-    <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-top:1.1rem;">
-      <button id="hm-close-btn">Done</button>
-    </div>
-  </div>
-</div>
-
 <script>
 (function() {
 "use strict";
 
-var DEFAULT_HOLDINGS = [
+var HOLDINGS = [
   {t:'AAPL',th:'Big Tech'},{t:'AMZN',th:'Big Tech'},{t:'ASML',th:'Semis'},
   {t:'AVGO',th:'Semis'},{t:'BA',th:'Industrial'},{t:'BABA',th:'China Tech'},
   {t:'BAC',th:'Financials'},{t:'BEP',th:'Clean Energy'},{t:'BEPC',th:'Clean Energy'},
@@ -182,9 +142,8 @@ var DEFAULT_HOLDINGS = [
   {t:'VTRS',th:'Healthcare'},{t:'WAB',th:'Industrial'},{t:'WMT',th:'Consumer'},
   {t:'XOM',th:'Energy'},{t:'SPY',th:'Benchmark'},{t:'QQQ',th:'Benchmark'}
 ];
-var HOLDINGS = DEFAULT_HOLDINGS.slice();
 var DEFAULT_WL = ['NET','FIX','NFLX','COST','V','BLK','UNH','ABT','NEE','ATZAF'];
-var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln', HOLD_K='hf_holdings';
+var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln';
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
@@ -201,8 +160,6 @@ function loadWLN(){return sg(WLN_K)||{};}
 function saveWLN(t,v){var n=loadWLN();if(v&&v.trim())n[t]=v.trim();else delete n[t];ss(WLN_K,n);}
 function loadArch(){return sg(AR_K)||[];}
 function saveArch(e){var l=loadArch();l.unshift(e);if(l.length>30)l.length=30;ss(AR_K,l);}
-function loadHoldings(){var h=sg(HOLD_K);return(h&&h.length)?h:DEFAULT_HOLDINGS.slice();}
-function saveHoldings(l){ss(HOLD_K,l);}
 
 function setP(pct,lbl){document.getElementById('pbfill').style.width=pct+'%';document.getElementById('plabel').textContent=lbl;}
 function slp(ms){return new Promise(function(r){setTimeout(r,ms);});}
@@ -212,13 +169,15 @@ function fPct(n){if(n==null)return'<span class="na">n/a</span>';return'<span cla
 function fChg(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'-')+'$'+Math.abs(n).toFixed(2)+'</span>';}
 
 var antKey='', finKey='', fmpKey='', qMode=false;
+var fmpCalls=0;
 function fmp(path){
   var base='https://financialmodelingprep.com/stable';
   var sep=path.indexOf('?')>=0?'&':'?';
   var url=base+path+sep+'apikey='+fmpKey;
+  fmpCalls++;
   return fetch(url)
     .then(function(r){if(!r.ok)throw new Error('FMP '+r.status);return r.json();})
-    .catch(function(e){console.warn('FMP error:',e.message,'path:',path);throw e;});
+    .catch(function(e){console.warn('FMP error:',e.message,'path:',path,'(call #'+fmpCalls+' this run)');throw e;});
 }
 
 function fhub(path,retries){
@@ -255,6 +214,7 @@ function calcFib(highs, lows, closes) {
     high: swingHigh,
     low:  swingLow
   };
+  // Find nearest level
   var nearest = null, nearestDist = Infinity, nearestName = '';
   var names = ['r236','r382','r500','r618','r786','high','low'];
   var labels = ['23.6%','38.2%','50%','61.8%','78.6%','High','Low'];
@@ -268,8 +228,35 @@ function calcFib(highs, lows, closes) {
 
 function techSig(s20,s50,rsi,pr,macd,boll){if(!s20||!s50||!rsi||!pr)return'N/A';var sc=0;if(pr>s20)sc++;if(pr>s50)sc++;if(s20>s50)sc++;if(rsi>50)sc++;if(rsi<30)sc--;if(rsi>75)sc--;if(macd&&macd.hist!=null){if(macd.hist>0)sc++;else sc--;}if(boll&&boll.pct!=null){if(boll.pct>80)sc--;if(boll.pct<20)sc++;}if(sc>=5)return'STRONG BUY';if(sc>=3)return'BUY';if(sc<=-1)return'SELL';if(sc<=1)return'WEAK';return'HOLD';}
 
+function compositeScore(tk,tm,r,pt,wt,pm,am,q){
+  var score=0,reasons=[];
+  if(tm&&tm.rsi!=null){if(tm.rsi>70){score--;reasons.push('RSI overbought ('+tm.rsi.toFixed(0)+')');}if(tm.rsi<30){score++;reasons.push('RSI oversold ('+tm.rsi.toFixed(0)+')');}}
+  if(r&&r.hi52&&r.lo52&&q&&q.price){
+    var rp=(q.price-r.lo52)/(r.hi52-r.lo52);
+    if(rp>0.92){score--;reasons.push('Near 52w high');}
+    if(rp<0.08){score++;reasons.push('Near 52w low');}
+  }
+  if(pt&&q&&q.price){
+    var upside=(pt.mean-q.price)/q.price;
+    if(upside<0){score--;reasons.push('Above avg analyst target');}
+    if(upside>0.15){score++;reasons.push('>15% below target ('+(upside*100).toFixed(0)+'%)');}
+  }
+  if(wt&&wt.pct>15){score--;reasons.push('Position >15% of portfolio');}
+  if(pm&&pm.peVsHist!=null){
+    if(pm.peVsHist>25){score--;reasons.push('P/E '+pm.peVsHist.toFixed(0)+'% above 5yr avg');}
+    if(pm.peVsHist<-15){score++;reasons.push('P/E '+Math.abs(pm.peVsHist).toFixed(0)+'% below 5yr avg');}
+  }
+  if(am){
+    if(am.trend==='improving'){score++;reasons.push('Analyst sentiment improving');}
+    if(am.trend==='declining'){score--;reasons.push('Analyst sentiment declining');}
+  }
+  var label='NEUTRAL';
+  if(score<=-3)label='STRONG TRIM';else if(score<=-1)label='TRIM WATCH';else if(score>=3)label='STRONG ADD';else if(score>=1)label='ADD WATCH';
+  return{score:score,label:label,reasons:reasons};
+}
+
 window.exportData=function(){
-  var data={shares:loadSh(),notes:loadNt(),watchlist:loadWL(),wlnotes:loadWLN(),holdings:loadHoldings()};
+  var data={shares:loadSh(),notes:loadNt(),watchlist:loadWL(),wlnotes:loadWLN()};
   var json=JSON.stringify(data,null,2);
   var blob=new Blob([json],{type:'application/json'});
   var url=URL.createObjectURL(blob);
@@ -291,7 +278,6 @@ window.importData=function(){
         if(data.notes)ss(NT_K,data.notes);
         if(data.watchlist)ss(WL_K,data.watchlist);
         if(data.wlnotes)ss(WLN_K,data.wlnotes);
-        if(data.holdings)ss(HOLD_K,data.holdings);
         alert('Data imported successfully. Reload the page to see your shares.');
       }catch(err){alert('Import failed: '+err.message);}
     };
@@ -302,60 +288,6 @@ window.importData=function(){
 window.addWL=function(){var inp=document.getElementById('wl-inp');var tk=inp.value.trim().toUpperCase();if(!tk)return;var l=loadWL();if(l.indexOf(tk)<0){l.push(tk);saveWL(l);}inp.value='';alert('Added '+tk+'. Reload to see it.');};
 window.rmWL=function(tk){var l=loadWL().filter(function(x){return x!==tk;});saveWL(l);var row=document.getElementById('wlrow-'+tk);if(row)row.parentNode.removeChild(row);};
 window.toggleArch=function(i){var f=document.getElementById('af-'+i),p=document.getElementById('ap-'+i),btn=document.getElementById('ab-'+i),open=f.style.display==='block';f.style.display=open?'none':'block';p.style.display=open?'-webkit-box':'none';btn.textContent=open?'Read full brief':'Collapse';};
-
-window.openHoldingsManager=function(){renderHoldingsManager();document.getElementById('hmodal-overlay').style.display='flex';};
-window.closeHoldingsManager=function(){document.getElementById('hmodal-overlay').style.display='none';};
-
-function renderHoldingsManager(){
-  var list=loadHoldings();
-  var themes=[];
-  list.forEach(function(h){if(themes.indexOf(h.th)<0)themes.push(h.th);});
-  var dl=document.getElementById('hm-theme-list');
-  dl.innerHTML=themes.map(function(t){return '<option value="'+t.replace(/"/g,'&quot;')+'">';}).join('');
-  var sh=loadSh();
-  var rows=list.slice().sort(function(a,b){if(a.th!==b.th)return a.th<b.th?-1:1;return a.t<b.t?-1:1;});
-  var container=document.getElementById('hm-list');
-  if(!rows.length){container.innerHTML='<div style="color:var(--dim);font-size:0.82rem;padding:0.8rem 0;">No holdings yet.</div>';return;}
-  container.innerHTML=rows.map(function(h){
-    var shTxt=sh[h.t]?sh[h.t]+' sh saved':'no shares set';
-    return '<div class="hm-row"><span class="hm-row-tk">'+h.t+'</span><span class="badge">'+h.th+'</span><span class="hm-row-sh">'+shTxt+'</span><button class="hm-rm" data-hmrm="'+h.t+'">&times;</button></div>';
-  }).join('');
-  container.querySelectorAll('[data-hmrm]').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var tk=btn.getAttribute('data-hmrm');
-      if(!window.confirm('Remove '+tk+' from your holdings list? Any saved shares/notes for it are kept and will reappear if you re-add it.'))return;
-      var l=loadHoldings().filter(function(x){return x.t!==tk;});
-      saveHoldings(l);
-      var note=document.getElementById('hm-note');
-      note.textContent='Removed '+tk+'. Reload the page and click Generate Brief again to update the report.';
-      note.style.display='block';
-      renderHoldingsManager();
-    });
-  });
-}
-
-document.getElementById('hm-add-btn').addEventListener('click',function(){
-  var tkInput=document.getElementById('hm-ticker');
-  var thInput=document.getElementById('hm-theme');
-  var err=document.getElementById('hm-err');
-  var note=document.getElementById('hm-note');
-  err.style.display='none';note.style.display='none';
-  var tk=tkInput.value.trim().toUpperCase();
-  var th=thInput.value.trim();
-  if(!tk){err.textContent='Enter a ticker symbol.';err.style.display='block';return;}
-  if(!/^[A-Z0-9.\-]{1,10}$/.test(tk)){err.textContent='That doesn\'t look like a valid ticker symbol.';err.style.display='block';return;}
-  if(!th){err.textContent='Enter or select a theme/sector for this holding.';err.style.display='block';return;}
-  var l=loadHoldings();
-  if(l.some(function(h){return h.t===tk;})){err.textContent=tk+' is already in your holdings.';err.style.display='block';return;}
-  l.push({t:tk,th:th});
-  saveHoldings(l);
-  tkInput.value='';thInput.value='';
-  note.textContent='Added '+tk+' ('+th+'). Reload the page and click Generate Brief again to fetch its data.';
-  note.style.display='block';
-  renderHoldingsManager();
-});
-document.getElementById('hm-close-btn').addEventListener('click',window.closeHoldingsManager);
-document.getElementById('hmodal-overlay').addEventListener('click',function(e){if(e.target.id==='hmodal-overlay')window.closeHoldingsManager();});
 
 var PEER_MAP = {
   'AAPL':  ['MSFT','GOOGL','META'],
@@ -410,7 +342,6 @@ var PEER_MAP = {
 };
 
 function main(){
-  HOLDINGS = loadHoldings();
   var qdata=[], fails=[];
   var rangeMap={}, targetMap={}, techMap={}, epsMap={}, newsDigest=[], analystMap={}, earningsMap={}, wlData=[];
   var peerMap={}, earnPreviewMap={};
@@ -421,6 +352,7 @@ function main(){
 
   setP(2,'Fetching quotes...');
 
+  // Step 1: Quotes in batches of 5
   function fetchBatch(batch){
     return Promise.allSettled(batch.map(function(h){return fhub('/quote?symbol='+h.t);}))
       .then(function(results){
@@ -445,6 +377,7 @@ function main(){
     })(hlds.slice(bi,bi+bs),bi);
   }
 
+  // Step 2: 52w ranges + targets
   chain=chain.then(function(){
     setP(22,'Fetching ranges...');
     var p2=Promise.resolve();
@@ -460,6 +393,7 @@ function main(){
     return p2;
   });
 
+  // Step 3: Technical analysis - top 10 by value
   chain=chain.then(function(){
     setP(44,'Computing weights + technical...');
     var sh=loadSh(), totalV=0, ranked=[];
@@ -487,7 +421,7 @@ function main(){
             var r90=cl.length>=91?(cl[cl.length-1]-cl[cl.length-91])/cl[cl.length-91]*100:null;
             var vr=vo&&vo.length>=20?vo[vo.length-1]/(vo.slice(-20).reduce(function(a,b){return a+b;},0)/20):null;
             var fib=calcFib(hi,lo,cl);
-            techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,fib:fib,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr};
+            techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,fib:fib,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr,closes:cl};
           }
         }).catch(function(){});
       }).then(function(){return slp(1500);});
@@ -495,6 +429,7 @@ function main(){
     return p3;
   });
 
+  // RS vs SPY
   chain=chain.then(function(){
     var spy=techMap['SPY']||null;
     Object.keys(techMap).forEach(function(tk){
@@ -505,18 +440,31 @@ function main(){
     });
   });
 
+  // Step 4: EPS - independently ranked top 20 (was piggybacking on the top-10 technical
+  // analysis pool, which capped real coverage at 8 regardless of this slice number)
   chain=chain.then(function(){
     setP(60,'Fetching earnings...');
-    var epsTk=Object.keys(techMap).filter(function(t){return t!=='SPY';}).slice(0,8);
+    var sh4=loadSh(), ranked4=[];
+    qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).forEach(function(q){
+      ranked4.push({t:q.t,v:(sh4[q.t]||0)*(q.price||0)});
+    });
+    ranked4.sort(function(a,b){return b.v-a.v;});
+    var epsTk=ranked4.filter(function(x){return x.v>0;}).slice(0,20).map(function(x){return x.t;});
+    if(epsTk.length<3){
+      epsTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,20).map(function(q){return q.t;});
+    }
     var p4=Promise.resolve();
-    epsTk.forEach(function(tk){
+    epsTk.forEach(function(tk,i){
       p4=p4.then(function(){
+        setP(60+Math.round(i/epsTk.length*4),'Earnings '+(i+1)+'/'+epsTk.length+': '+tk);
         return fhub('/stock/earnings?symbol='+tk+'&limit=1').then(function(e){if(e&&e.length>0)epsMap[tk]={date:e[0].period,actual:e[0].actual,est:e[0].estimate,surpPct:e[0].surprisePercent};}).catch(function(){});
       }).then(function(){return slp(1300);});
     });
     return p4;
   });
 
+  // Step 5: Earnings calendar
   chain=chain.then(function(){
     setP(64,'Earnings calendar...');
     var from=new Date().toISOString().slice(0,10);
@@ -526,6 +474,7 @@ function main(){
     }).catch(function(){});
   }).then(function(){return slp(1300);});
 
+  // Step 6: News
   chain=chain.then(function(){
     setP(67,'Fetching news...');
     var valid=qdata.filter(function(q){return q.pct!=null;});
@@ -542,18 +491,36 @@ function main(){
     return p6;
   });
 
+  // Step 7: Analyst
   chain=chain.then(function(){
     setP(74,'Analyst ratings...');
     var aTk=Object.keys(techMap).filter(function(t){return t!=='SPY';}).slice(0,8);
     var p7=Promise.resolve();
     aTk.forEach(function(tk){
       p7=p7.then(function(){
-        return fhub('/stock/recommendation?symbol='+tk).then(function(r){if(r&&r.length>0)analystMap[tk]={buy:r[0].strongBuy+r[0].buy,hold:r[0].hold,sell:r[0].sell+r[0].strongSell};}).catch(function(){});
+        return fhub('/stock/recommendation?symbol='+tk).then(function(r){
+          if(r&&r.length>0){
+            var now=r[0], buyNow=now.strongBuy+now.buy, totalNow=buyNow+now.hold+now.sell+now.strongSell;
+            var buyPctNow=totalNow>0?buyNow/totalNow:null;
+            var trend='stable', buyPctPast=null;
+            if(r.length>3){
+              var past=r[Math.min(3,r.length-1)];
+              var buyPast=past.strongBuy+past.buy, totalPast=buyPast+past.hold+past.sell+past.strongSell;
+              buyPctPast=totalPast>0?buyPast/totalPast:null;
+              if(buyPctNow!=null&&buyPctPast!=null){
+                if(buyPctNow-buyPctPast>0.08)trend='improving';
+                else if(buyPctPast-buyPctNow>0.08)trend='declining';
+              }
+            }
+            analystMap[tk]={buy:buyNow,hold:now.hold,sell:now.sell+now.strongSell,trend:trend,buyPctNow:buyPctNow,buyPctPast:buyPctPast};
+          }
+        }).catch(function(){});
       }).then(function(){return slp(1300);});
     });
     return p7;
   });
 
+  // Step 8: Watchlist
   chain=chain.then(function(){
     setP(80,'Watchlist...');
     var wlTk=loadWL();
@@ -571,57 +538,79 @@ function main(){
     return p8;
   });
 
+  // Step 9: Peer comparison using FMP stable endpoints
   chain=chain.then(function(){
     setP(86,'Peer comparison (FMP)...');
     var sh=loadSh();
+    // Trimmed to top 5 (was 10) to stay well under FMP free-tier daily call quotas -
+    // each held ticker costs ~4-5 FMP calls (own ratios+growth, peer list, 1 peer's ratios+growth)
     var ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
       .map(function(q){return{t:q.t,v:(sh[q.t]||0)*(q.price||0)};})
-      .sort(function(a,b){return b.v-a.v;}).slice(0,10).map(function(x){return x.t;});
+      .sort(function(a,b){return b.v-a.v;}).slice(0,5).map(function(x){return x.t;});
     if(ranked.length<3){
       ranked=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
-        .slice(0,8).map(function(q){return q.t;});
+        .slice(0,5).map(function(q){return q.t;});
     }
 
     var p9=Promise.resolve();
+    var loggedSample=false;
     ranked.forEach(function(tk){
       p9=p9.then(function(){
+        // Fetch ratios for held stock - use the real P/E and margin fields FMP returns directly
         return fmp('/ratios-ttm?symbol='+tk).then(function(r){
           var d=r&&r.length?r[0]:r||{};
+          if(!loggedSample){console.log('FMP ratios-ttm sample ('+tk+'):',d);loggedSample=true;}
           peerMap[tk]=peerMap[tk]||{};
           peerMap[tk].ticker=tk;
+          peerMap[tk].pe=d.priceToEarningsRatioTTM!=null?d.priceToEarningsRatioTTM:null;
           peerMap[tk].margin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
           peerMap[tk].grossMargin=d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null;
+          peerMap[tk].divYield=d.dividendYieldTTM!=null?(d.dividendYieldTTM*100):null;
           peerMap[tk].peers=peerMap[tk].peers||[];
-        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,margin:null,peers:[]};});
+        }).catch(function(){peerMap[tk]=peerMap[tk]||{ticker:tk,pe:null,margin:null,peers:[]};});
       }).then(function(){return slp(300);})
       .then(function(){
-        return fmp('/key-metrics-ttm?symbol='+tk).then(function(r){
+        // Fetch revenue growth (annual) - field name confirmed via console.log on first ticker
+        return fmp('/income-statement-growth?symbol='+tk+'&period=annual&limit=1').then(function(r){
           var d=r&&r.length?r[0]:r||{};
+          console.log('FMP income-statement-growth sample ('+tk+'):',d);
           if(peerMap[tk]){
-            peerMap[tk].evSales=d.evToSalesTTM||null;
-            peerMap[tk].evEbitda=d.evToEBITDATTM||null;
+            var g=d.growthRevenue!=null?d.growthRevenue:(d.revenueGrowth!=null?d.revenueGrowth:null);
+            peerMap[tk].revGrowth=g!=null?(g*100):null;
           }
         }).catch(function(){});
       }).then(function(){return slp(300);})
       .then(function(){
-        return fmp('/profile?symbol='+tk).then(function(r){
-          var d=r&&r.length?r[0]:r||{};
-          if(peerMap[tk]){
-            peerMap[tk].price=d.price||null;
-            peerMap[tk].mktCap=d.marketCap||null;
-            peerMap[tk].beta=d.beta||null;
-            if(peerMap[tk].mktCap&&peerMap[tk].margin&&peerMap[tk].evSales){
-              var approxRev = peerMap[tk].mktCap / (peerMap[tk].evSales||1);
-              var approxNetIncome = approxRev * (peerMap[tk].margin/100);
-              peerMap[tk].derivedPE = approxNetIncome > 0 ? peerMap[tk].mktCap / approxNetIncome : null;
+        // Valuation vs own 5yr history: annual (non-TTM) ratios, averaged over last 5 years
+        return fmp('/ratios?symbol='+tk+'&period=annual&limit=5').then(function(r){
+          console.log('FMP ratios (5yr history) sample ('+tk+'):',r&&r.length?r[0]:r);
+          if(r&&r.length&&peerMap[tk]){
+            var pes=r.map(function(x){return x.priceToEarningsRatio!=null?x.priceToEarningsRatio:(x.priceToEarningsRatioTTM!=null?x.priceToEarningsRatioTTM:null);}).filter(function(v){return v!=null&&v>0;});
+            if(pes.length>=2){
+              var avgPe=pes.reduce(function(a,b){return a+b;},0)/pes.length;
+              peerMap[tk].histPE=avgPe;
+              peerMap[tk].peVsHist=(peerMap[tk].pe!=null&&avgPe>0)?((peerMap[tk].pe-avgPe)/avgPe*100):null;
             }
           }
         }).catch(function(){});
       }).then(function(){return slp(300);})
       .then(function(){
+        // FCF yield from key-metrics-ttm
+        return fmp('/key-metrics-ttm?symbol='+tk).then(function(r){
+          var d=r&&r.length?r[0]:r||{};
+          console.log('FMP key-metrics-ttm sample ('+tk+'):',d);
+          if(peerMap[tk]){
+            var fy=d.freeCashFlowYieldTTM!=null?d.freeCashFlowYieldTTM:(d.fcfYieldTTM!=null?d.fcfYieldTTM:null);
+            peerMap[tk].fcfYield=fy!=null?(fy*100):null;
+          }
+        }).catch(function(){});
+      }).then(function(){return slp(300);})
+      .then(function(){
+        // Get peer list from FMP stable endpoint
         return fmp('/stock-peers?symbol='+tk).then(function(peers){
           if(!peers||!peers.length)return;
-          var peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,3);
+          // stock-peers returns array of peer objects with symbol, price, mktCap
+          var peerTickers=peers.filter(function(p){return p.symbol&&p.symbol!==tk;}).slice(0,1);
           var pp=Promise.resolve();
           peerTickers.forEach(function(peerObj){
             var pt=peerObj.symbol;
@@ -630,20 +619,27 @@ function main(){
                 var d=r&&r.length?r[0]:r||{};
                 var pq=qdata.filter(function(q){return q.t===pt;})[0];
                 if(peerMap[tk]){
-                  var pNetMargin=d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null;
-                  var pDerivedPE=null;
                   peerMap[tk].peers.push({
                     t:pt,
                     price:peerObj.price||null,
                     pct:pq?pq.pct:null,
-                    margin:pNetMargin,
+                    pe:d.priceToEarningsRatioTTM!=null?d.priceToEarningsRatioTTM:null,
+                    margin:d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null,
                     grossMargin:d.grossProfitMarginTTM!=null?(d.grossProfitMarginTTM*100):null,
                     mktCap:peerObj.mktCap||null,
-                    derivedPE:pDerivedPE
+                    revGrowth:null
                   });
                 }
               }).catch(function(){
-                if(peerMap[tk])peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,derivedPE:null});
+                if(peerMap[tk])peerMap[tk].peers.push({t:pt,price:peerObj.price||null,pct:null,pe:null,margin:null,grossMargin:null,mktCap:peerObj.mktCap||null,revGrowth:null});
+              }).then(function(){return slp(300);})
+              .then(function(){
+                return fmp('/income-statement-growth?symbol='+pt+'&period=annual&limit=1').then(function(r){
+                  var d=r&&r.length?r[0]:r||{};
+                  var g=d.growthRevenue!=null?d.growthRevenue:(d.revenueGrowth!=null?d.revenueGrowth:null);
+                  var peerEntry=peerMap[tk]&&peerMap[tk].peers.filter(function(pe){return pe.t===pt;})[0];
+                  if(peerEntry)peerEntry.revGrowth=g!=null?(g*100):null;
+                }).catch(function(){});
               });
             }).then(function(){return slp(300);});
           });
@@ -651,9 +647,37 @@ function main(){
         }).catch(function(){});
       }).then(function(){return slp(300);});
     });
-    return p9;
+    return p9.then(function(){console.log('Total FMP calls this run so far (through peer comparison):',fmpCalls);});
   });
 
+  // Step 9.5: Correlation across top holdings - computed from candle data already fetched
+  // in Step 3, zero additional API calls
+  var corrPairs=[];
+  chain=chain.then(function(){
+    function pearson(a,b){
+      var n=Math.min(a.length,b.length);
+      if(n<15)return null;
+      a=a.slice(-n);b=b.slice(-n);
+      var ra=[],rb=[],i;
+      for(i=1;i<n;i++){ra.push((a[i]-a[i-1])/a[i-1]);rb.push((b[i]-b[i-1])/b[i-1]);}
+      var ma=ra.reduce(function(x,y){return x+y;},0)/ra.length;
+      var mb=rb.reduce(function(x,y){return x+y;},0)/rb.length;
+      var cov=0,va=0,vb=0,j;
+      for(j=0;j<ra.length;j++){cov+=(ra[j]-ma)*(rb[j]-mb);va+=Math.pow(ra[j]-ma,2);vb+=Math.pow(rb[j]-mb,2);}
+      if(va===0||vb===0)return null;
+      return cov/Math.sqrt(va*vb);
+    }
+    var tks=Object.keys(techMap).filter(function(t){return t!=='SPY'&&techMap[t].closes;});
+    for(var i=0;i<tks.length;i++){
+      for(var j=i+1;j<tks.length;j++){
+        var c=pearson(techMap[tks[i]].closes,techMap[tks[j]].closes);
+        if(c!=null)corrPairs.push({a:tks[i],b:tks[j],c:c});
+      }
+    }
+    corrPairs.sort(function(x,y){return y.c-x.c;});
+  });
+
+  // Step 10: Earnings preview via FMP analyst estimates
   chain=chain.then(function(){
     setP(92,'Earnings previews (FMP)...');
     var upcoming=Object.keys(earningsMap).filter(function(t){
@@ -663,6 +687,7 @@ function main(){
     var p10=Promise.resolve();
     upcoming.slice(0,8).forEach(function(tk){
       p10=p10.then(function(){
+        // Try analyst-estimates endpoint (available on free tier)
         return fmp('/analyst-estimates?symbol='+tk+'&period=quarter&limit=1').then(function(est){
           if(est&&est.length>0){
             var next=est[0];
@@ -675,6 +700,7 @@ function main(){
             earnPreviewMap[tk].revLow=next.estimatedRevenueLow||null;
             earnPreviewMap[tk].period=next.date||null;
           } else {
+            // Fallback: use EPS from last report + price to derive implied forward P/E
             earnPreviewMap[tk]=earnPreviewMap[tk]||{note:'Estimates pending'};
           }
         }).catch(function(){
@@ -685,8 +711,9 @@ function main(){
     return p10;
   });
 
+  // Step 11: Render
   chain=chain.then(function(){
-    render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap);
+    render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs);
   }).catch(function(e){
     document.getElementById('progress').style.display='none';
     document.getElementById('report').style.display='block';
@@ -694,7 +721,7 @@ function main(){
   });
 }
 
-function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap){
+function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs){
   setP(90,'Rendering...');
   var valid=qdata.filter(function(q){return q.pct!=null&&q.th!=='Benchmark';});
   var sorted=valid.slice().sort(function(a,b){return b.pct-a.pct;});
@@ -722,9 +749,10 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var totalFmt=totalV>0?'$'+totalV.toLocaleString('en-US',{maximumFractionDigits:0}):'Enter shares to calculate';
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
-  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;"><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="window.openHoldingsManager()">[H] Holdings</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
+  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;"><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
   if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
 
+  // Scorecard
   html+='<div class="scorecard">';
   html+='<div class="sc"><div class="sc-label">Portfolio Avg</div><div class="sc-val '+(avgPct>=0?'up':'dn')+'">'+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'%</div><div class="sc-sub">'+gainCount+' up / '+lossCount+' dn</div></div>';
   html+='<div class="sc"><div class="sc-label">Portfolio Value</div><div class="sc-val" style="font-size:0.95rem;">'+totalFmt+'</div></div>';
@@ -734,8 +762,10 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   html+='<div class="sc"><div class="sc-label">Alerts</div><div class="sc-val" style="color:'+(alerts.length?'var(--yellow)':'var(--green)')+'">'+alerts.length+'</div><div class="sc-sub">'+(alerts.length?'Flags raised':'All clear')+'</div></div>';
   html+='</div>';
 
+  // Alerts
   if(alerts.length){html+='<div class="section" style="border-color:rgba(233,69,96,0.3)"><h3>Alert Flags</h3>';alerts.forEach(function(a){html+='<div class="abar"><span class="abar-tk">'+a.t+'</span><span class="abar-r">'+a.reason+'</span><span class="abar-p '+(a.pct>=0?'up':'dn')+'">'+(a.pct>=0?'+':'')+a.pct.toFixed(2)+'%</span></div>';});html+='</div>';}
 
+  // Sector perf
   var maxS=0.01;sectors.forEach(function(s){if(Math.abs(s.avg)>maxS)maxS=Math.abs(s.avg);});
   html+='<div class="section"><h3>Sector Performance</h3>';
   sectors.filter(function(s){return s.n!=='Benchmark'&&s.n!=='ETF';}).forEach(function(s){
@@ -743,6 +773,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   });
   html+='</div>';
 
+  // Weight concentration
   if(totalV>0){
     var sectorW={};
     valid.forEach(function(q){if(!sectorW[q.th])sectorW[q.th]=0;sectorW[q.th]+=(wm[q.t]?wm[q.t].pct:0);});
@@ -753,29 +784,65 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     html+='</div>';
   }
 
+  // Peer comparison table
   var peerKeys=Object.keys(peerMap);
   if(peerKeys.length){
-    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">Est P/E</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th><th class="r">EV/Sales</th><th class="r">EV/EBITDA</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Peer Comparison - Top Holdings vs Sector Peers</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Role</th><th class="r">Price</th><th class="r">Day%</th><th class="r">P/E</th><th class="r">Rev Growth%</th><th class="r">Net Margin%</th><th class="r">Gross Margin%</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk];
       var qh=qdata.filter(function(q){return q.t===tk;})[0];
+      var hpe=pm.pe!=null?pm.pe.toFixed(1):'<span class="na">--</span>';
+      var hrg=pm.revGrowth!=null?'<span class="'+(pm.revGrowth>=0?'up':'dn')+'">'+(pm.revGrowth>=0?'+':'')+pm.revGrowth.toFixed(1)+'%</span>':'<span class="na">--</span>';
       var hmg=pm.margin!=null?pm.margin.toFixed(1)+'%':'<span class="na">--</span>';
       var hgmg=pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'<span class="na">--</span>';
-      var hevs=pm.evSales!=null?pm.evSales.toFixed(1):'<span class="na">--</span>';
-      var heve=pm.evEbitda!=null?pm.evEbitda.toFixed(1):'<span class="na">--</span>';
-      var hpe2=pm.derivedPE!=null?pm.derivedPE.toFixed(1):'<span class="na">--</span>';
-      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r">'+hpe2+'</td><td class="r">'+hmg+'</td><td class="r">'+hgmg+'</td><td class="r">'+hevs+'</td><td class="r">'+heve+'</td></tr>';
+      html+='<tr style="background:rgba(83,52,131,0.15)"><td class="tk">'+tk+'</td><td style="font-size:0.72rem;color:var(--green)">HELD</td><td class="r">'+fP(qh?qh.price:null)+'</td><td class="r">'+fPct(qh?qh.pct:null)+'</td><td class="r">'+hpe+'</td><td class="r">'+hrg+'</td><td class="r">'+hmg+'</td><td class="r">'+hgmg+'</td></tr>';
       pm.peers.forEach(function(p){
+        var ppe=p.pe!=null?p.pe.toFixed(1):'<span class="na">--</span>';
+        var prg=p.revGrowth!=null?'<span class="'+(p.revGrowth>=0?'up':'dn')+'">'+(p.revGrowth>=0?'+':'')+p.revGrowth.toFixed(1)+'%</span>':'<span class="na">--</span>';
         var pmg2=p.margin!=null?p.margin.toFixed(1)+'%':'<span class="na">--</span>';
         var pgmg=p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'<span class="na">--</span>';
         var mcap=p.mktCap!=null?'$'+(p.mktCap/1e9).toFixed(0)+'B':'--';
-        var ppe2=p.derivedPE!=null?p.derivedPE.toFixed(1):'<span class="na">--</span>';
-        html+='<tr><td class="tk" style="color:var(--dim);padding-left:1.5rem;">'+p.t+'</td><td style="font-size:0.72rem;color:var(--dim)">peer '+mcap+'</td><td class="r">'+fP(p.price)+'</td><td class="r">'+fPct(p.pct)+'</td><td class="r">'+ppe2+'</td><td class="r">'+pmg2+'</td><td class="r">'+pgmg+'</td><td class="r na">--</td><td class="r na">--</td></tr>';
+        html+='<tr><td class="tk" style="color:var(--dim);padding-left:1.5rem;">'+p.t+'</td><td style="font-size:0.72rem;color:var(--dim)">peer '+mcap+'</td><td class="r">'+fP(p.price)+'</td><td class="r">'+fPct(p.pct)+'</td><td class="r">'+ppe+'</td><td class="r">'+prg+'</td><td class="r">'+pmg2+'</td><td class="r">'+pgmg+'</td></tr>';
       });
     });
     html+='</tbody></table></div></div>';
   }
 
+  // Valuation vs history, FCF yield, dividend - and composite trim/add signal
+  if(peerKeys.length){
+    var sh5=loadSh(), wm5={}, tv5=0;
+    qdata.forEach(function(q){var v=(sh5[q.t]||0)*(q.price||0);wm5[q.t]={pct:0,v:v};tv5+=v;});
+    if(tv5>0)Object.keys(wm5).forEach(function(t){wm5[t].pct=wm5[t].v/tv5*100;});
+    html+='<div class="section"><h3>Valuation vs. Own History, Yield &amp; Position Signal</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">P/E vs 5yr Avg</th><th class="r">FCF Yield</th><th class="r">Div Yield</th><th class="r">Analyst Trend</th><th class="r">Signal</th></tr></thead><tbody>';
+    peerKeys.forEach(function(tk){
+      var pm=peerMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];
+      var pvh=pm.peVsHist!=null?'<span class="'+(pm.peVsHist<=0?'up':'dn')+'">'+(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'%</span>':'<span class="na">--</span>';
+      var fcfy=pm.fcfYield!=null?pm.fcfYield.toFixed(1)+'%':'<span class="na">--</span>';
+      var dvy=pm.divYield!=null?pm.divYield.toFixed(1)+'%':'<span class="na">--</span>';
+      var am=analystMap[tk];
+      var atrend=am?('<span style="color:'+(am.trend==='improving'?'var(--green)':am.trend==='declining'?'var(--red)':'var(--dim)')+'">'+am.trend+'</span>'):'<span class="na">--</span>';
+      var cs=compositeScore(tk,techMap[tk],rangeMap[tk],targetMap[tk],wm5[tk],pm,am,qh);
+      var csColor=cs.label.indexOf('TRIM')>=0?'var(--red)':cs.label.indexOf('ADD')>=0?'var(--green)':'var(--dim)';
+      var csCell='<span style="color:'+csColor+';font-weight:700;font-size:0.75rem;" title="'+cs.reasons.join('; ').replace(/"/g,'&quot;')+'">'+cs.label+'</span>';
+      html+='<tr><td class="tk">'+tk+'</td><td class="r">'+pvh+'</td><td class="r">'+fcfy+'</td><td class="r">'+dvy+'</td><td class="r" style="font-size:0.78rem;">'+atrend+'</td><td class="r">'+csCell+'</td></tr>';
+    });
+    html+='</tbody></table></div><div style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;">Hover a signal for the reasons behind it. Signal is a heuristic combining RSI, 52w range position, analyst target gap, position weight, valuation vs 5yr history, and analyst sentiment trend - not a recommendation.</div></div>';
+  }
+
+  // Correlation watch - flags highly correlated pairs among top holdings (limited diversification benefit)
+  if(corrPairs&&corrPairs.length){
+    var highCorr=corrPairs.filter(function(p){return p.c>0.7;}).slice(0,6);
+    if(highCorr.length){
+      html+='<div class="section"><h3>Correlation Watch - Top Holdings</h3><div style="font-size:0.78rem;color:var(--dim);margin-bottom:0.6rem;">Based on 90-day daily returns. High correlation between positions means they tend to move together - reducing one may not meaningfully diversify the other.</div>';
+      highCorr.forEach(function(p){
+        var lvl=p.c>0.85?'var(--red)':'var(--yellow)';
+        html+='<div class="srow"><span class="slabel">'+p.a+' vs '+p.b+'</span><div class="sbar-wrap"><div class="sbar-fill" style="width:'+(p.c*100)+'%;background:'+lvl+'"></div></div><span class="spct" style="color:'+lvl+'">'+p.c.toFixed(2)+'</span></div>';
+      });
+      html+='</div>';
+    }
+  }
+
+  // Earnings preview
   var epKeys=Object.keys(earnPreviewMap);
   if(epKeys.length){
     html+='<div class="section"><h3>Earnings Preview - Next 30 Days</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Date</th><th class="r">EPS Est</th><th class="r">EPS Range</th><th class="r">Rev Est</th><th class="r">Rev Range</th></tr></thead><tbody>';
@@ -790,8 +857,10 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     html+='</tbody></table></div></div>';
   }
 
+  // AI Brief
   html+='<div class="section"><h3>AI Brief</h3><div id="brief-stream"><span class="cursor"></span></div></div>';
 
+  // Technical table
   var techKeys=Object.keys(techMap).filter(function(t){return t!=='SPY';});
   if(techKeys.length){
     var sigOrd={'STRONG BUY':0,'BUY':1,'HOLD':2,'WEAK':3,'SELL':4,'N/A':5};
@@ -817,18 +886,21 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     html+='</tbody></table></div></div>';
   }
 
+  // EPS
   if(Object.keys(epsMap).length){
     html+='<div class="section"><h3>Recent Earnings</h3>';
     Object.keys(epsMap).forEach(function(t){var e=epsMap[t],beat=e.surpPct>=0;html+='<div class="ep-row"><span class="ep-tk">'+t+'</span><span class="ep-dim">'+e.date+'</span><span class="'+(beat?'ep-beat':'ep-miss')+'">'+(beat?'BEAT':'MISS')+' '+(e.surpPct>=0?'+':'')+e.surpPct.toFixed(1)+'%</span><span class="ep-dim">Act $'+(e.actual||0).toFixed(2)+' Est $'+(e.est||0).toFixed(2)+'</span></div>';});
     html+='</div>';
   }
 
+  // News
   if(newsDigest.length){
     html+='<div class="section"><h3>Today\'s News</h3>';
     newsDigest.forEach(function(n){html+='<div class="ni"><div class="ni-tk">'+n.t+'</div><div><div class="ni-hl">'+n.hl+'</div><div class="ni-src">'+n.src+'</div></div></div>';});
     html+='</div>';
   }
 
+  // Holdings table
   var notes=loadNt();
   html+='<div class="section"><h3>Holdings <span style="font-size:0.7rem;color:var(--dim);font-weight:400;">Shares + notes auto-save</span></h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Theme</th><th class="r">Price</th><th class="r">Chg</th><th class="r">Day%</th><th class="r hm">52w</th><th class="r hm">Target</th><th class="r hm">Weight</th><th class="r hm">Signal</th><th class="r hm">Earnings</th><th class="r hm">Shares</th><th class="hm">Notes</th></tr></thead><tbody>';
   qdata.filter(function(q){return q.th!=='Benchmark';}).forEach(function(q){
@@ -847,6 +919,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   });
   html+='</tbody></table></div></div>';
 
+  // Watchlist
   var wlnotes=loadWLN();
   html+='<div class="section" style="border-color:rgba(255,214,102,0.2)"><h3 style="color:var(--yellow)">Watchlist ('+loadWL().length+' stocks)</h3><div class="wl-add"><input type="text" id="wl-inp" placeholder="Add ticker..."><button onclick="addWL()">+ Add</button></div>';
   wlData.forEach(function(w){
@@ -857,6 +930,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   });
   html+='</div>';
 
+  // Archive
   var arch=loadArch();
   if(arch.length){
     html+='<div class="section"><h3>Brief Archive ('+arch.length+')</h3>';
@@ -869,6 +943,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   ra.style.display='block';
   ra.innerHTML=html;
 
+  // Wire inputs
   document.querySelectorAll('.sh-in').forEach(function(inp){
     var tk=inp.getAttribute('data-tk');
     inp.addEventListener('input',function(){saveSh(tk,inp.value);});
@@ -879,6 +954,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   document.querySelectorAll('[data-wltk]').forEach(function(inp){var tk=inp.getAttribute('data-wltk');inp.addEventListener('input',function(){saveWLN(tk,inp.value);});});
   document.querySelectorAll('[data-rmtk]').forEach(function(btn){var tk=btn.getAttribute('data-rmtk');btn.addEventListener('click',function(){window.rmWL(tk);});});
 
+  // Build prompt
   var holdStr=valid.map(function(q){
     var w=wm[q.t],pt=targetMap[q.t],tm=techMap[q.t],shv=sh[q.t]||0,val=shv*(q.price||0);
     return q.t+'('+san(q.th)+'): $'+(q.price||0).toFixed(2)+' '+(q.pct>=0?'+':'')+q.pct.toFixed(2)+'%'+(shv>0?' '+shv+'sh($'+val.toLocaleString('en-US',{maximumFractionDigits:0})+')':'')+(w&&w.pct>0?' wt:'+w.pct.toFixed(1)+'%':'')+(pt?' tgt:$'+pt.mean.toFixed(0):'')+(tm?' RSI:'+tm.rsi.toFixed(0)+' '+tm.sig+' '+tm.trend:'');
@@ -900,7 +976,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers.\n'
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
     +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
-    +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E, forward P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers.\n'
+    +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers, AND relative to their own 5-year valuation history (a stock can be cheap vs peers but still expensive vs its own past). Reference FCF yield and dividend yield where relevant to the valuation case. Note whether analyst sentiment is improving or declining for key holdings, and flag any highly correlated position pairs where trimming one would not meaningfully diversify the portfolio. Use the composite Signal label (STRONG TRIM/TRIM WATCH/NEUTRAL/ADD WATCH/STRONG ADD) as a starting point for your own judgment, not a verdict to repeat verbatim.\n'
     +'6. EARNINGS QUALITY AND PREVIEW: Interpret recent EPS surprises from the historical data. Then for any holdings reporting in the next 30 days, discuss what the consensus expects (EPS and revenue estimates with ranges), what a beat or miss would likely mean for the stock given current positioning, and which upcoming reports carry the most portfolio risk given position sizes.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
     +'8. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
@@ -909,7 +985,10 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'DATA:\n'
     +'Portfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\n'
     +'Value: '+totalFmt+'\nTop positions: '+topPos+'\n\n'
-    +'Holdings:\n'+holdStr+'\n\nAlerts:\n'+alertStr+'\n\nTechnical:\n'+techStr+'\n\nAnalyst:\n'+analStr+'\n\nEPS:\n'+epsStr+'\n\nNews:\n'+newsStr+'\n\nUpcoming earnings: '+earnStr+'\n\nWatchlist:\n'+wlStr+'\n\nPeer comparison (your holding vs sector peers):\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk];return tk+' NetMargin:'+(pm.margin!=null?pm.margin.toFixed(1)+'%':'n/a')+' GrossMargin:'+(pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'n/a')+' EV/Sales:'+(pm.evSales!=null?pm.evSales.toFixed(1):'n/a')+' EV/EBITDA:'+(pm.evEbitda!=null?pm.evEbitda.toFixed(1):'n/a')+'  vs peers: '+pm.peers.map(function(p){return p.t+' NetMgn:'+(p.margin!=null?p.margin.toFixed(1)+'%':'n/a')+' GrossMgn:'+(p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'n/a');}).join(' | ');}).join('\n')||'none'+'\n\nEarnings estimates (next 30 days):\n'+Object.keys(earnPreviewMap).map(function(tk){var ep=earnPreviewMap[tk];return tk+'('+earningsMap[tk]+'): EPS est $'+(ep.epsEst!=null?ep.epsEst.toFixed(2):'n/a')+' range $'+(ep.epsLow!=null?ep.epsLow.toFixed(2):'n/a')+'-$'+(ep.epsHigh!=null?ep.epsHigh.toFixed(2):'n/a')+' RevEst $'+(ep.revEst!=null?(ep.revEst/1e9).toFixed(1)+'B':'n/a');}).join('\n')||'none'+'\n\nWrite the complete brief now.';
+    +'Holdings:\n'+holdStr+'\n\nAlerts:\n'+alertStr+'\n\nTechnical:\n'+techStr+'\n\nAnalyst:\n'+analStr+'\n\nEPS:\n'+epsStr+'\n\nNews:\n'+newsStr+'\n\nUpcoming earnings: '+earnStr+'\n\nWatchlist:\n'+wlStr+'\n\nPeer comparison (your holding vs sector peers):\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk];return tk+' P/E:'+(pm.pe!=null?pm.pe.toFixed(1):'n/a')+' RevGrowth:'+(pm.revGrowth!=null?pm.revGrowth.toFixed(1)+'%':'n/a')+' NetMargin:'+(pm.margin!=null?pm.margin.toFixed(1)+'%':'n/a')+' GrossMargin:'+(pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'n/a')+'  vs peers: '+pm.peers.map(function(p){return p.t+' P/E:'+(p.pe!=null?p.pe.toFixed(1):'n/a')+' RevGrowth:'+(p.revGrowth!=null?p.revGrowth.toFixed(1)+'%':'n/a')+' NetMgn:'+(p.margin!=null?p.margin.toFixed(1)+'%':'n/a')+' GrossMgn:'+(p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'n/a');}).join(' | ');}).join('\n')||'none'
+    +'\n\nValuation vs own 5yr history, yield, and composite signal:\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk],am=analystMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];var cs=compositeScore(tk,techMap[tk],rangeMap[tk],targetMap[tk],null,pm,am,qh);return tk+' PEvsHist:'+(pm.peVsHist!=null?(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'%':'n/a')+' FCFYield:'+(pm.fcfYield!=null?pm.fcfYield.toFixed(1)+'%':'n/a')+' DivYield:'+(pm.divYield!=null?pm.divYield.toFixed(1)+'%':'n/a')+' AnalystTrend:'+(am?am.trend:'n/a')+' Signal:'+cs.label+'('+cs.reasons.join(', ')+')';}).join('\n')||'none'
+    +'\n\nHigh correlation pairs among top holdings (>0.7, may limit diversification benefit):\n'+(corrPairs&&corrPairs.length?corrPairs.filter(function(p){return p.c>0.7;}).slice(0,6).map(function(p){return p.a+' vs '+p.b+': '+p.c.toFixed(2);}).join('\n'):'none')
+    +'\n\nEarnings estimates (next 30 days):\n'+Object.keys(earnPreviewMap).map(function(tk){var ep=earnPreviewMap[tk];return tk+'('+earningsMap[tk]+'): EPS est $'+(ep.epsEst!=null?ep.epsEst.toFixed(2):'n/a')+' range $'+(ep.epsLow!=null?ep.epsLow.toFixed(2):'n/a')+'-$'+(ep.epsHigh!=null?ep.epsHigh.toFixed(2):'n/a')+' RevEst $'+(ep.revEst!=null?(ep.revEst/1e9).toFixed(1)+'B':'n/a');}).join('\n')||'none'+'\n\nWrite the complete brief now.';
 
   var briefEl=document.getElementById('brief-stream');
   var fullBrief='';
