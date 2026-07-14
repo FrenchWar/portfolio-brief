@@ -123,7 +123,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 (function() {
 "use strict";
 
-var HOLDINGS = [
+var DEFAULT_HOLDINGS = [
   {t:'AAPL',th:'Big Tech'},{t:'AMZN',th:'Big Tech'},{t:'ASML',th:'Semis'},
   {t:'AVGO',th:'Semis'},{t:'BA',th:'Industrial'},{t:'BABA',th:'China Tech'},
   {t:'BAC',th:'Financials'},{t:'BEP',th:'Clean Energy'},{t:'BEPC',th:'Clean Energy'},
@@ -143,7 +143,7 @@ var HOLDINGS = [
   {t:'XOM',th:'Energy'},{t:'SPY',th:'Benchmark'},{t:'QQQ',th:'Benchmark'}
 ];
 var DEFAULT_WL = ['NET','FIX','NFLX','COST','BLK','UNH','ABT','NEE','ATZAF'];
-var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln';
+var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', WL_K='hf_wl', WLN_K='hf_wln', HOLD_K='hf_holdings';
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
@@ -158,6 +158,8 @@ function loadWL(){var w=sg(WL_K);return(w&&w.length)?w:DEFAULT_WL.slice();}
 function saveWL(l){ss(WL_K,l);}
 function loadWLN(){return sg(WLN_K)||{};}
 function saveWLN(t,v){var n=loadWLN();if(v&&v.trim())n[t]=v.trim();else delete n[t];ss(WLN_K,n);}
+function loadHold(){var h=sg(HOLD_K);return(h&&h.length)?h:DEFAULT_HOLDINGS.slice();}
+function saveHold(l){ss(HOLD_K,l);}
 function loadArch(){return sg(AR_K)||[];}
 function saveArch(e){var l=loadArch();l.unshift(e);if(l.length>30)l.length=30;ss(AR_K,l);}
 
@@ -256,7 +258,7 @@ function compositeScore(tk,tm,r,pt,wt,pm,am,q){
 }
 
 window.exportData=function(){
-  var data={shares:loadSh(),notes:loadNt(),watchlist:loadWL(),wlnotes:loadWLN()};
+  var data={shares:loadSh(),notes:loadNt(),watchlist:loadWL(),wlnotes:loadWLN(),holdings:loadHold()};
   var json=JSON.stringify(data,null,2);
   var blob=new Blob([json],{type:'application/json'});
   var url=URL.createObjectURL(blob);
@@ -278,6 +280,7 @@ window.importData=function(){
         if(data.notes)ss(NT_K,data.notes);
         if(data.watchlist)ss(WL_K,data.watchlist);
         if(data.wlnotes)ss(WLN_K,data.wlnotes);
+        if(data.holdings)ss(HOLD_K,data.holdings);
         alert('Data imported successfully. Reload the page to see your shares.');
       }catch(err){alert('Import failed: '+err.message);}
     };
@@ -287,6 +290,27 @@ window.importData=function(){
 };
 window.addWL=function(){var inp=document.getElementById('wl-inp');var tk=inp.value.trim().toUpperCase();if(!tk)return;var l=loadWL();if(l.indexOf(tk)<0){l.push(tk);saveWL(l);}inp.value='';alert('Added '+tk+'. Reload to see it.');};
 window.rmWL=function(tk){var l=loadWL().filter(function(x){return x!==tk;});saveWL(l);var row=document.getElementById('wlrow-'+tk);if(row)row.parentNode.removeChild(row);};
+window.addHold=function(){
+  var tkInp=document.getElementById('hold-tk-inp'),thInp=document.getElementById('hold-th-inp');
+  var tk=tkInp.value.trim().toUpperCase(),th=thInp.value.trim();
+  if(!tk){alert('Enter a ticker symbol.');return;}
+  if(!th)th='Other';
+  var l=loadHold();
+  if(l.some(function(h){return h.t===tk;})){alert(tk+' is already a holding.');return;}
+  l.push({t:tk,th:th});
+  saveHold(l);
+  tkInp.value='';thInp.value='';
+  alert('Added '+tk+' ('+th+'). Click [R] Reload, then Generate Brief to fetch its data.');
+};
+window.rmHold=function(tk){
+  if(!confirm('Remove '+tk+' from holdings? This deletes its saved shares and notes too.'))return;
+  var l=loadHold().filter(function(h){return h.t!==tk;});
+  saveHold(l);
+  var sh=loadSh();delete sh[tk];ss(SH_K,sh);
+  var nt=loadNt();delete nt[tk];ss(NT_K,nt);
+  var row=document.getElementById('holdrow-'+tk);
+  if(row)row.parentNode.removeChild(row);
+};
 window.toggleArch=function(i){var f=document.getElementById('af-'+i),p=document.getElementById('ap-'+i),btn=document.getElementById('ab-'+i),open=f.style.display==='block';f.style.display=open?'none':'block';p.style.display=open?'-webkit-box':'none';btn.textContent=open?'Read full brief':'Collapse';};
 
 var PEER_MAP = {
@@ -345,6 +369,7 @@ function main(){
   var qdata=[], fails=[];
   var rangeMap={}, targetMap={}, techMap={}, epsMap={}, newsDigest=[], analystMap={}, earningsMap={}, wlData=[];
   var peerMap={}, earnPreviewMap={};
+  var HOLDINGS=loadHold(); // user-editable list (Add/Remove Position buttons) - falls back to DEFAULT_HOLDINGS
 
   var hlds = qMode
     ? HOLDINGS.filter(function(h){return h.th==='Benchmark';}).concat(HOLDINGS.filter(function(h){return h.th!=='Benchmark';}).slice(0,15))
@@ -902,7 +927,9 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
 
   // Holdings table
   var notes=loadNt();
-  html+='<div class="section"><h3>Holdings <span style="font-size:0.7rem;color:var(--dim);font-weight:400;">Shares + notes auto-save</span></h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Theme</th><th class="r">Price</th><th class="r">Chg</th><th class="r">Day%</th><th class="r hm">52w</th><th class="r hm">Target</th><th class="r hm">Weight</th><th class="r hm">Signal</th><th class="r hm">Earnings</th><th class="r hm">Shares</th><th class="hm">Notes</th></tr></thead><tbody>';
+  html+='<div class="section"><h3>Holdings <span style="font-size:0.7rem;color:var(--dim);font-weight:400;">Shares + notes auto-save</span></h3>';
+  html+='<div class="wl-add" style="margin-bottom:1rem;"><input type="text" id="hold-tk-inp" placeholder="Ticker (e.g. NVDA)" style="max-width:160px;"><input type="text" id="hold-th-inp" placeholder="Theme (e.g. Semis)" style="max-width:160px;"><button onclick="addHold()">+ Add Position</button></div>';
+  html+='<div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th>Theme</th><th class="r">Price</th><th class="r">Chg</th><th class="r">Day%</th><th class="r hm">52w</th><th class="r hm">Target</th><th class="r hm">Weight</th><th class="r hm">Signal</th><th class="r hm">Earnings</th><th class="r hm">Shares</th><th class="hm">Notes</th><th></th></tr></thead><tbody>';
   qdata.filter(function(q){return q.th!=='Benchmark';}).forEach(function(q){
     var r=rangeMap[q.t]||{},pt=targetMap[q.t],tm=techMap[q.t],wt=wm[q.t];
     var earn=earningsMap[q.t]||'';
@@ -915,7 +942,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var ptCell=pt?'<span style="color:'+(q.price&&pt.mean>q.price?'var(--green)':'var(--yellow)')+'">$'+pt.mean.toFixed(0)+'</span>':'--';
     var wtCell=wt&&wt.pct>0?wt.pct.toFixed(1)+'%':'--';
     var sigCell=tm?'<span class="'+(tm.sig==='STRONG BUY'||tm.sig==='BUY'?'sig-buy':tm.sig==='SELL'||tm.sig==='WEAK'?'sig-sell':'sig-hold')+'">'+tm.sig+'</span>':'--';
-    html+='<tr><td class="tk">'+(isAlert?'(!) ':'')+q.t+'</td><td><span class="badge">'+q.th+'</span></td><td class="r">'+fP(q.price)+'</td><td class="r">'+fChg(q.change)+'</td><td class="r">'+fPct(q.pct)+'</td><td class="r hm">'+rangeCell+'</td><td class="r hm">'+ptCell+'</td><td class="r hm">'+wtCell+'</td><td class="r hm">'+sigCell+'</td><td class="r hm" style="font-size:0.75rem;color:'+(earn?'var(--yellow)':'var(--dim)')+';">'+(earn||'--')+'</td><td class="r hm"><input type="number" class="sh-in" data-tk="'+q.t+'" min="0" step="any" placeholder="0" value="'+shv+'"></td><td class="hm"><textarea class="note-in" data-tk="'+q.t+'" rows="1" placeholder="notes...">'+note+'</textarea></td></tr>';
+    html+='<tr id="holdrow-'+q.t+'"><td class="tk">'+(isAlert?'(!) ':'')+q.t+'</td><td><span class="badge">'+q.th+'</span></td><td class="r">'+fP(q.price)+'</td><td class="r">'+fChg(q.change)+'</td><td class="r">'+fPct(q.pct)+'</td><td class="r hm">'+rangeCell+'</td><td class="r hm">'+ptCell+'</td><td class="r hm">'+wtCell+'</td><td class="r hm">'+sigCell+'</td><td class="r hm" style="font-size:0.75rem;color:'+(earn?'var(--yellow)':'var(--dim)')+';">'+(earn||'--')+'</td><td class="r hm"><input type="number" class="sh-in" data-tk="'+q.t+'" min="0" step="any" placeholder="0" value="'+shv+'"></td><td class="hm"><textarea class="note-in" data-tk="'+q.t+'" rows="1" placeholder="notes...">'+note+'</textarea></td><td><button class="wl-rm" data-rmhold="'+q.t+'" title="Remove '+q.t+'">x</button></td></tr>';
   });
   html+='</tbody></table></div></div>';
 
@@ -953,6 +980,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   document.querySelectorAll('.note-in').forEach(function(ta){var tk=ta.getAttribute('data-tk');ta.addEventListener('input',function(){saveNt(tk,ta.value);});});
   document.querySelectorAll('[data-wltk]').forEach(function(inp){var tk=inp.getAttribute('data-wltk');inp.addEventListener('input',function(){saveWLN(tk,inp.value);});});
   document.querySelectorAll('[data-rmtk]').forEach(function(btn){var tk=btn.getAttribute('data-rmtk');btn.addEventListener('click',function(){window.rmWL(tk);});});
+  document.querySelectorAll('[data-rmhold]').forEach(function(btn){var tk=btn.getAttribute('data-rmhold');btn.addEventListener('click',function(){window.rmHold(tk);});});
 
   // Build prompt
   var holdStr=valid.map(function(q){
