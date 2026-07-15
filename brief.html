@@ -107,6 +107,10 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
     <div class="fl"><label>FMP API Key <span class="saved" id="fmp-saved">saved</span></label><input type="password" id="fmp-key" placeholder="financialmodelingprep key" autocomplete="off"></div>
+    <div class="fl" style="border-top:1px solid var(--border);padding-top:1rem;"><label>EmailJS Service ID <span class="saved" id="ejs-svc-saved">saved</span> <span style="color:var(--dim);text-transform:none;font-weight:400;">(optional, for Email Report)</span></label><input type="text" id="ejs-svc" placeholder="service_xxxxxxx" autocomplete="off"></div>
+    <div class="fl"><label>EmailJS Template ID <span class="saved" id="ejs-tpl-saved">saved</span></label><input type="text" id="ejs-tpl" placeholder="template_xxxxxxx" autocomplete="off"></div>
+    <div class="fl"><label>EmailJS Public Key <span class="saved" id="ejs-pub-saved">saved</span></label><input type="text" id="ejs-pub" placeholder="public key" autocomplete="off"></div>
+    <div style="font-size:0.68rem;color:var(--dim);margin:-0.5rem 0 1rem;line-height:1.5;">Free account at emailjs.com. In your EmailJS template, use these variables: {{to_email}}, {{subject}}, {{date}}, {{summary}}, {{brief_html}} (or {{brief_text}} for plain text).</div>
     <div class="fl"><label>Mode</label><select id="mode-sel"><option value="full">Full Brief</option><option value="quick">Quick Brief</option></select></div>
     <div id="errmsg"></div>
     <button id="genbtn">Generate Brief</button>
@@ -119,6 +123,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
   <div id="plabel">Initialising...</div>
 </div>
 <div id="report"></div>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
 (function() {
 "use strict";
@@ -147,9 +152,9 @@ var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', 
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}if(s&&s.m){document.getElementById('fmp-key').value=s.m;document.getElementById('fmp-saved').style.display='inline';}}
-function saveKeys(a,f,m){ss(KEYS_K,{a:a,f:f,m:m});}
-function clearKeys(){ss(KEYS_K,null);document.getElementById('ant-key').value='';document.getElementById('fin-key').value='';document.getElementById('fmp-key').value='';document.getElementById('ant-saved').style.display='none';document.getElementById('fin-saved').style.display='none';document.getElementById('fmp-saved').style.display='none';}
+function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}if(s&&s.m){document.getElementById('fmp-key').value=s.m;document.getElementById('fmp-saved').style.display='inline';}if(s&&s.es){document.getElementById('ejs-svc').value=s.es;document.getElementById('ejs-svc-saved').style.display='inline';}if(s&&s.et){document.getElementById('ejs-tpl').value=s.et;document.getElementById('ejs-tpl-saved').style.display='inline';}if(s&&s.ep){document.getElementById('ejs-pub').value=s.ep;document.getElementById('ejs-pub-saved').style.display='inline';}}
+function saveKeys(a,f,m,es,et,ep){ss(KEYS_K,{a:a,f:f,m:m,es:es,et:et,ep:ep});}
+function clearKeys(){ss(KEYS_K,null);['ant-key','fin-key','fmp-key','ejs-svc','ejs-tpl','ejs-pub'].forEach(function(id){document.getElementById(id).value='';});['ant-saved','fin-saved','fmp-saved','ejs-svc-saved','ejs-tpl-saved','ejs-pub-saved'].forEach(function(id){document.getElementById(id).style.display='none';});}
 function loadSh(){return sg(SH_K)||{};}
 function saveSh(t,v){var s=loadSh();var n=parseFloat(v);if(!isNaN(n)&&n>0)s[t]=n;else delete s[t];ss(SH_K,s);}
 function loadNt(){return sg(NT_K)||{};}
@@ -170,7 +175,7 @@ function fP(n){return n!=null?'$'+n.toFixed(2):'<span class="na">n/a</span>';}
 function fPct(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'')+n.toFixed(2)+'%</span>';}
 function fChg(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'-')+'$'+Math.abs(n).toFixed(2)+'</span>';}
 
-var antKey='', finKey='', fmpKey='', qMode=false;
+var antKey='', finKey='', fmpKey='', qMode=false, ejsService='', ejsTemplate='', ejsPublic='';
 var fmpCalls=0;
 function fmp(path){
   var base='https://financialmodelingprep.com/stable';
@@ -287,6 +292,34 @@ window.importData=function(){
     reader.readAsText(file);
   };
   inp.click();
+};
+window.emailReport=function(){
+  var toInp=document.getElementById('email-to-inp');
+  var to=toInp?toInp.value.trim():'';
+  if(!to||to.indexOf('@')<0){alert('Enter a valid recipient email address in the field next to the Email button.');return;}
+  if(!ejsService||!ejsTemplate||!ejsPublic){alert('EmailJS is not configured yet. Reload, open the setup screen, and fill in the three EmailJS fields (Service ID, Template ID, Public Key) from your free emailjs.com account. See the notes below the Email button for what your EmailJS template needs.');return;}
+  if(!window.emailjs){alert('EmailJS library failed to load (check your internet connection) - try reloading the page.');return;}
+  if(!window.__briefReady){alert('The AI Brief is still being written - wait for it to finish streaming before emailing.');return;}
+  var meta=window.__briefMeta||{};
+  var subject='Portfolio Brief - '+(meta.date||new Date().toLocaleDateString())+' (avg '+(meta.avg>=0?'+':'')+(meta.avg!=null?meta.avg.toFixed(2):'0.00')+'%)';
+  var bodyHtml=(window.__briefText||'').split('---').map(function(p){return p.trim();}).filter(function(p){return p.length>0;}).map(function(p){return'<p>'+san(p).split(String.fromCharCode(10)).join('<br>')+'</p>';}).join('');
+  var summary='Portfolio avg: '+(meta.avg>=0?'+':'')+(meta.avg!=null?meta.avg.toFixed(2):'0.00')+'% | SPY: '+meta.spy+'% | QQQ: '+meta.qqq+'% | Value: '+meta.totalFmt+' | Alerts: '+meta.alerts;
+  var btn=document.querySelector('button[onclick="window.emailReport()"]');
+  if(btn){btn.textContent='Sending...';btn.disabled=true;}
+  window.emailjs.send(ejsService,ejsTemplate,{
+    to_email:to,
+    subject:subject,
+    date:meta.date||'',
+    summary:summary,
+    brief_html:bodyHtml,
+    brief_text:window.__briefText||''
+  }).then(function(){
+    alert('Sent to '+to+'.');
+    if(btn){btn.textContent='[M] Email';btn.disabled=false;}
+  }).catch(function(err){
+    alert('Email failed to send: '+(err&&err.text?err.text:'check your EmailJS Service ID, Template ID, and Public Key.'));
+    if(btn){btn.textContent='[M] Email';btn.disabled=false;}
+  });
 };
 window.addWL=function(){var inp=document.getElementById('wl-inp');var tk=inp.value.trim().toUpperCase();if(!tk)return;var l=loadWL();if(l.indexOf(tk)<0){l.push(tk);saveWL(l);}inp.value='';alert('Added '+tk+'. Reload to see it.');};
 window.rmWL=function(tk){var l=loadWL().filter(function(x){return x!==tk;});saveWL(l);var row=document.getElementById('wlrow-'+tk);if(row)row.parentNode.removeChild(row);};
@@ -774,7 +807,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var totalFmt=totalV>0?'$'+totalV.toLocaleString('en-US',{maximumFractionDigits:0}):'Enter shares to calculate';
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
-  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;"><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
+  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;"><input type="email" id="email-to-inp" placeholder="recipient@email.com" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.4rem 0.7rem;font-size:0.8rem;width:190px;"><button class="rbtn" onclick="window.emailReport()">[M] Email</button><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
   if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
 
   // Scorecard
@@ -998,12 +1031,12 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'');}).join('\n')||'none';
 
   var prompt='You are a senior portfolio analyst. Write a professional close-of-market brief in 8-10 paragraphs of flowing prose. Separate paragraphs with ---. No bullet points.\n'
-    +'RULES: Do NOT mention insider trading or Form 4 filings under any circumstances. Every paragraph must name specific tickers and cite specific numbers.\n\n'
+    +'RULES: Do NOT mention insider trading or Form 4 filings under any circumstances. Every paragraph must name specific tickers and cite specific numbers. If data for a metric or ticker is genuinely absent from the DATA section below, say so plainly in a short clause rather than writing vague, hedging, or filler language to sound comprehensive without real content - do not write sentences that could apply to any stock without the actual numbers behind them.\n\n'
     +'Cover in order:\n'
     +'1. MARKET OVERVIEW: Portfolio vs SPY/QQQ. Value if available.\n'
     +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers.\n'
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
-    +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis. Name tickers and numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis.\n'
+    +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis ONLY for the tickers listed with real numbers in the Technical data section below. Name those specific tickers and their actual numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis. Do NOT discuss or speculate about technical indicators for any ticker not listed in that data - do not use vague phrases like "price action allows for pattern inference" to paper over missing data. If a holding has no technical data this cycle, either omit it from this paragraph entirely or state plainly in one clause that granular technical data was not available for it.\n'
     +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers, AND relative to their own 5-year valuation history (a stock can be cheap vs peers but still expensive vs its own past). Reference FCF yield and dividend yield where relevant to the valuation case. Note whether analyst sentiment is improving or declining for key holdings, and flag any highly correlated position pairs where trimming one would not meaningfully diversify the portfolio. Use the composite Signal label (STRONG TRIM/TRIM WATCH/NEUTRAL/ADD WATCH/STRONG ADD) as a starting point for your own judgment, not a verdict to repeat verbatim.\n'
     +'6. EARNINGS QUALITY AND PREVIEW: Interpret recent EPS surprises from the historical data. Then for any holdings reporting in the next 30 days, discuss what the consensus expects (EPS and revenue estimates with ranges), what a beat or miss would likely mean for the stock given current positioning, and which upcoming reports carry the most portfolio risk given position sizes.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
@@ -1020,6 +1053,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
 
   var briefEl=document.getElementById('brief-stream');
   var fullBrief='';
+  window.__briefReady=false;
 
   fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -1035,6 +1069,9 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
         if(result.done){
           briefEl.innerHTML=fullBrief.split('---').map(function(p){return p.trim();}).filter(function(p){return p.length>0;}).map(function(p){return'<p>'+p.split(NL).join('<br>')+'</p>';}).join('<hr>');
           saveArch({date:new Date().toISOString(),label:today,brief:fullBrief,avg:avgPct});
+          window.__briefReady=true;
+          window.__briefText=fullBrief;
+          window.__briefMeta={date:today,avg:avgPct,totalFmt:totalFmt,spy:(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a'),qqq:(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a'),alerts:alerts.length};
           return;
         }
         var lines2=decoder.decode(result.value).split(NL);
@@ -1057,13 +1094,17 @@ document.addEventListener('DOMContentLoaded',function(){
     antKey=document.getElementById('ant-key').value.trim();
     finKey=document.getElementById('fin-key').value.trim();
     fmpKey=document.getElementById('fmp-key').value.trim();
+    ejsService=document.getElementById('ejs-svc').value.trim();
+    ejsTemplate=document.getElementById('ejs-tpl').value.trim();
+    ejsPublic=document.getElementById('ejs-pub').value.trim();
     qMode=document.getElementById('mode-sel').value==='quick';
     var err=document.getElementById('errmsg');
     if(!antKey||antKey.indexOf('sk-ant')!==0){err.textContent='Please enter a valid Anthropic API key.';err.style.display='block';return;}
     if(!finKey){err.textContent='Please enter your Finnhub API key.';err.style.display='block';return;}
     if(!fmpKey||fmpKey.length<20){err.textContent='Please enter your FMP API key.';err.style.display='block';return;}
     err.style.display='none';
-    saveKeys(antKey,finKey,fmpKey);
+    saveKeys(antKey,finKey,fmpKey,ejsService,ejsTemplate,ejsPublic);
+    if(ejsPublic&&window.emailjs)window.emailjs.init(ejsPublic);
     document.getElementById('overlay').style.display='none';
     document.getElementById('progress').style.display='block';
     setP(2,'Starting...');
