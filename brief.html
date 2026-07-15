@@ -405,7 +405,15 @@ function main(){
   var HOLDINGS=loadHold(); // user-editable list (Add/Remove Position buttons) - falls back to DEFAULT_HOLDINGS
 
   var hlds = qMode
-    ? HOLDINGS.filter(function(h){return h.th==='Benchmark';}).concat(HOLDINGS.filter(function(h){return h.th!=='Benchmark';}).slice(0,15))
+    ? (function(){
+        var bench=HOLDINGS.filter(function(h){return h.th==='Benchmark';});
+        var nonBench=HOLDINGS.filter(function(h){return h.th!=='Benchmark';});
+        var defaultTk={};DEFAULT_HOLDINGS.forEach(function(h){defaultTk[h.t]=true;});
+        var top15=nonBench.slice(0,15);
+        var top15Tk={};top15.forEach(function(h){top15Tk[h.t]=true;});
+        var custom=nonBench.filter(function(h){return !defaultTk[h.t]&&!top15Tk[h.t];});
+        return bench.concat(top15).concat(custom);
+      })()
     : HOLDINGS;
 
   setP(2,'Fetching quotes...');
