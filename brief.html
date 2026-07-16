@@ -197,6 +197,29 @@ function fhub(path,retries){
     });
 }
 
+function stooqDate(d){function p2(n){return n<10?'0'+n:''+n;}return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate());}
+function stooq(tk){
+  // Free, no-signup daily OHLCV history - replaces Finnhub's candle endpoint, which
+  // moved behind a paid plan. US tickers use a lowercase ".us" suffix on Stooq; share
+  // classes like MOG.A become mog-a.us.
+  var sym=tk.toLowerCase().replace(/\./g,'-')+'.us';
+  var d2=new Date(), d1=new Date(Date.now()-320*24*3600*1000);
+  var url='https://stooq.com/q/d/l/?s='+sym+'&i=d&d1='+stooqDate(d1)+'&d2='+stooqDate(d2);
+  return fetch(url).then(function(r){
+    if(!r.ok)throw new Error('Stooq '+r.status);
+    return r.text();
+  }).then(function(txt){
+    var lines=txt.trim().split('\n');
+    if(lines.length<21||lines[0].indexOf('Date')!==0)throw new Error('Stooq: no usable data for '+tk);
+    var rows=lines.slice(1).map(function(line){
+      var p=line.split(',');
+      return{date:p[0],open:parseFloat(p[1]),high:parseFloat(p[2]),low:parseFloat(p[3]),close:parseFloat(p[4]),volume:parseFloat(p[5])};
+    }).filter(function(r){return !isNaN(r.close)&&!isNaN(r.high)&&!isNaN(r.low);});
+    if(rows.length<21)throw new Error('Stooq: insufficient rows for '+tk);
+    return rows;
+  });
+}
+
 function calcSMA(a,n){if(!a||a.length<n)return null;var s=0,i;for(i=a.length-n;i<a.length;i++)s+=a[i];return s/n;}
 function calcEMA(a,n){if(!a||a.length<n)return null;var k=2/(n+1),e=0,i,j;for(i=0;i<n;i++)e+=a[i];e/=n;for(j=n;j<a.length;j++)e=a[j]*k+e*(1-k);return e;}
 function calcRSI(a,n){if(!a||a.length<n+1)return null;var sl=a.slice(-(n+1)),g=0,l=0,i,d;for(i=1;i<sl.length;i++){d=sl[i]-sl[i-1];if(d>=0)g+=d;else l-=d;}var ag=g/n,al=l/n;return al===0?100:100-(100/(1+ag/al));}
@@ -470,14 +493,17 @@ function main(){
     var topTk=ranked.filter(function(x){return x.v>0;}).slice(0,10).map(function(x){return x.t;});
     if(topTk.length<3){topTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,10).map(function(q){return q.t;});}
     var techTk=['SPY'].concat(topTk);
-    var toTs=Math.floor(Date.now()/1000), fromTs=toTs-200*24*3600;
     var p3=Promise.resolve();
     techTk.forEach(function(tk,i){
       p3=p3.then(function(){
         setP(44+Math.round(i/techTk.length*14),'Technical '+(i+1)+'/'+techTk.length+': '+tk);
-        return fhub('/stock/candle?symbol='+tk+'&resolution=D&from='+fromTs+'&to='+toTs).then(function(c){
-          if(c&&c.s==='ok'&&c.c&&c.c.length>20){
-            var cl=c.c,hi=c.h,lo=c.l,vo=c.v,pr=cl[cl.length-1];
+        return stooq(tk).then(function(rows){
+          if(rows&&rows.length>20){
+            var cl=rows.map(function(r){return r.close;});
+            var hi=rows.map(function(r){return r.high;});
+            var lo=rows.map(function(r){return r.low;});
+            var vo=rows.map(function(r){return r.volume;});
+            var pr=cl[cl.length-1];
             var s20=calcSMA(cl,20),s50=calcSMA(cl,Math.min(50,cl.length-1)),rsi=calcRSI(cl,14);
             var macd=calcMACD(cl),boll=calcBoll(cl),atr=calcATR(hi,lo,cl,14);
             var sig=techSig(s20,s50,rsi,pr,macd,boll);
@@ -489,8 +515,8 @@ function main(){
             var fib=calcFib(hi,lo,cl);
             techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,fib:fib,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr,closes:cl};
           }
-        }).catch(function(){});
-      }).then(function(){return slp(1500);});
+        }).catch(function(e){console.warn('Stooq error for '+tk+':',e.message);});
+      }).then(function(){return slp(400);});
     });
     return p3;
   });
@@ -557,10 +583,20 @@ function main(){
     return p6;
   });
 
-  // Step 7: Analyst
+  // Step 7: Analyst - independently ranked (was piggybacking on techMap, so it silently
+  // went empty whenever technical data failed, even though analyst data isn't paywalled)
   chain=chain.then(function(){
     setP(74,'Analyst ratings...');
-    var aTk=Object.keys(techMap).filter(function(t){return t!=='SPY';}).slice(0,8);
+    var sh7=loadSh(),ranked7=[];
+    qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).forEach(function(q){
+      ranked7.push({t:q.t,v:(sh7[q.t]||0)*(q.price||0)});
+    });
+    ranked7.sort(function(a,b){return b.v-a.v;});
+    var aTk=ranked7.filter(function(x){return x.v>0;}).slice(0,8).map(function(x){return x.t;});
+    if(aTk.length<3){
+      aTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;})
+        .sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,8).map(function(q){return q.t;});
+    }
     var p7=Promise.resolve();
     aTk.forEach(function(tk){
       p7=p7.then(function(){
