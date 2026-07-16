@@ -107,6 +107,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
     <div class="fl"><label>FMP API Key <span class="saved" id="fmp-saved">saved</span></label><input type="password" id="fmp-key" placeholder="financialmodelingprep key" autocomplete="off"></div>
+    <div class="fl"><label>Twelve Data API Key <span class="saved" id="td-saved">saved</span> <span style="color:var(--dim);text-transform:none;font-weight:400;">(for technical analysis price history)</span></label><input type="password" id="td-key" placeholder="twelvedata.com key" autocomplete="off"></div>
     <div class="fl" style="border-top:1px solid var(--border);padding-top:1rem;"><label>EmailJS Service ID <span class="saved" id="ejs-svc-saved">saved</span> <span style="color:var(--dim);text-transform:none;font-weight:400;">(optional, for Email Report)</span></label><input type="text" id="ejs-svc" placeholder="service_xxxxxxx" autocomplete="off"></div>
     <div class="fl"><label>EmailJS Template ID <span class="saved" id="ejs-tpl-saved">saved</span></label><input type="text" id="ejs-tpl" placeholder="template_xxxxxxx" autocomplete="off"></div>
     <div class="fl"><label>EmailJS Public Key <span class="saved" id="ejs-pub-saved">saved</span></label><input type="text" id="ejs-pub" placeholder="public key" autocomplete="off"></div>
@@ -152,9 +153,9 @@ var KEYS_K='hf_api_keys', SH_K='hf_shares', NT_K='hf_notes', AR_K='hf_archive', 
 
 function sg(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
 function ss(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}if(s&&s.m){document.getElementById('fmp-key').value=s.m;document.getElementById('fmp-saved').style.display='inline';}if(s&&s.es){document.getElementById('ejs-svc').value=s.es;document.getElementById('ejs-svc-saved').style.display='inline';}if(s&&s.et){document.getElementById('ejs-tpl').value=s.et;document.getElementById('ejs-tpl-saved').style.display='inline';}if(s&&s.ep){document.getElementById('ejs-pub').value=s.ep;document.getElementById('ejs-pub-saved').style.display='inline';}}
-function saveKeys(a,f,m,es,et,ep){ss(KEYS_K,{a:a,f:f,m:m,es:es,et:et,ep:ep});}
-function clearKeys(){ss(KEYS_K,null);['ant-key','fin-key','fmp-key','ejs-svc','ejs-tpl','ejs-pub'].forEach(function(id){document.getElementById(id).value='';});['ant-saved','fin-saved','fmp-saved','ejs-svc-saved','ejs-tpl-saved','ejs-pub-saved'].forEach(function(id){document.getElementById(id).style.display='none';});}
+function loadKeys(){var s=sg(KEYS_K);if(s&&s.a){document.getElementById('ant-key').value=s.a;document.getElementById('ant-saved').style.display='inline';}if(s&&s.f){document.getElementById('fin-key').value=s.f;document.getElementById('fin-saved').style.display='inline';}if(s&&s.m){document.getElementById('fmp-key').value=s.m;document.getElementById('fmp-saved').style.display='inline';}if(s&&s.td){document.getElementById('td-key').value=s.td;document.getElementById('td-saved').style.display='inline';}if(s&&s.es){document.getElementById('ejs-svc').value=s.es;document.getElementById('ejs-svc-saved').style.display='inline';}if(s&&s.et){document.getElementById('ejs-tpl').value=s.et;document.getElementById('ejs-tpl-saved').style.display='inline';}if(s&&s.ep){document.getElementById('ejs-pub').value=s.ep;document.getElementById('ejs-pub-saved').style.display='inline';}}
+function saveKeys(a,f,m,td,es,et,ep){ss(KEYS_K,{a:a,f:f,m:m,td:td,es:es,et:et,ep:ep});}
+function clearKeys(){ss(KEYS_K,null);['ant-key','fin-key','fmp-key','td-key','ejs-svc','ejs-tpl','ejs-pub'].forEach(function(id){document.getElementById(id).value='';});['ant-saved','fin-saved','fmp-saved','td-saved','ejs-svc-saved','ejs-tpl-saved','ejs-pub-saved'].forEach(function(id){document.getElementById(id).style.display='none';});}
 function loadSh(){return sg(SH_K)||{};}
 function saveSh(t,v){var s=loadSh();var n=parseFloat(v);if(!isNaN(n)&&n>0)s[t]=n;else delete s[t];ss(SH_K,s);}
 function loadNt(){return sg(NT_K)||{};}
@@ -175,7 +176,7 @@ function fP(n){return n!=null?'$'+n.toFixed(2):'<span class="na">n/a</span>';}
 function fPct(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'')+n.toFixed(2)+'%</span>';}
 function fChg(n){if(n==null)return'<span class="na">n/a</span>';return'<span class="'+(n>=0?'up':'dn')+'">'+(n>=0?'+':'-')+'$'+Math.abs(n).toFixed(2)+'</span>';}
 
-var antKey='', finKey='', fmpKey='', qMode=false, ejsService='', ejsTemplate='', ejsPublic='';
+var antKey='', finKey='', fmpKey='', tdKey='', qMode=false, ejsService='', ejsTemplate='', ejsPublic='';
 var fmpCalls=0;
 function fmp(path){
   var base='https://financialmodelingprep.com/stable';
@@ -197,25 +198,21 @@ function fhub(path,retries){
     });
 }
 
-function stooqDate(d){function p2(n){return n<10?'0'+n:''+n;}return d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate());}
-function stooq(tk){
-  // Free, no-signup daily OHLCV history - replaces Finnhub's candle endpoint, which
-  // moved behind a paid plan. US tickers use a lowercase ".us" suffix on Stooq; share
-  // classes like MOG.A become mog-a.us.
-  var sym=tk.toLowerCase().replace(/\./g,'-')+'.us';
-  var d2=new Date(), d1=new Date(Date.now()-320*24*3600*1000);
-  var url='https://stooq.com/q/d/l/?s='+sym+'&i=d&d1='+stooqDate(d1)+'&d2='+stooqDate(d2);
+function twelveData(tk){
+  // Replaces Stooq (CORS-blocked from browsers) as the technical-analysis price history
+  // source. Twelve Data free tier: 800 req/day, 8 req/min.
+  var url='https://api.twelvedata.com/time_series?symbol='+encodeURIComponent(tk)+'&interval=1day&outputsize=260&order=ASC&apikey='+tdKey;
   return fetch(url).then(function(r){
-    if(!r.ok)throw new Error('Stooq '+r.status);
-    return r.text();
-  }).then(function(txt){
-    var lines=txt.trim().split('\n');
-    if(lines.length<21||lines[0].indexOf('Date')!==0)throw new Error('Stooq: no usable data for '+tk);
-    var rows=lines.slice(1).map(function(line){
-      var p=line.split(',');
-      return{date:p[0],open:parseFloat(p[1]),high:parseFloat(p[2]),low:parseFloat(p[3]),close:parseFloat(p[4]),volume:parseFloat(p[5])};
+    if(!r.ok)throw new Error('TwelveData HTTP '+r.status);
+    return r.json();
+  }).then(function(j){
+    if(!j||j.status==='error')throw new Error('TwelveData: '+(j&&j.message?j.message:'error for '+tk));
+    if(!j.values||!j.values.length)throw new Error('TwelveData: no values for '+tk);
+    var rows=j.values.map(function(v){
+      return{date:v.datetime,open:parseFloat(v.open),high:parseFloat(v.high),low:parseFloat(v.low),close:parseFloat(v.close),volume:parseFloat(v.volume)};
     }).filter(function(r){return !isNaN(r.close)&&!isNaN(r.high)&&!isNaN(r.low);});
-    if(rows.length<21)throw new Error('Stooq: insufficient rows for '+tk);
+    rows.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;}); // defensive - don't trust order=ASC blindly
+    if(rows.length<21)throw new Error('TwelveData: insufficient rows for '+tk);
     return rows;
   });
 }
@@ -497,7 +494,7 @@ function main(){
     techTk.forEach(function(tk,i){
       p3=p3.then(function(){
         setP(44+Math.round(i/techTk.length*14),'Technical '+(i+1)+'/'+techTk.length+': '+tk);
-        return stooq(tk).then(function(rows){
+        return twelveData(tk).then(function(rows){
           if(rows&&rows.length>20){
             var cl=rows.map(function(r){return r.close;});
             var hi=rows.map(function(r){return r.high;});
@@ -515,8 +512,8 @@ function main(){
             var fib=calcFib(hi,lo,cl);
             techMap[tk]={s20:s20,s50:s50,rsi:rsi,macd:macd,boll:boll,atr:atr,fib:fib,sig:sig,trend:trend,r30:r30,r90:r90,vr:vr,closes:cl};
           }
-        }).catch(function(e){console.warn('Stooq error for '+tk+':',e.message);});
-      }).then(function(){return slp(400);});
+        }).catch(function(e){console.warn('TwelveData error for '+tk+':',e.message);});
+      }).then(function(){return slp(7800);}); // 8 req/min free-tier limit - stay just under it
     });
     return p3;
   });
@@ -1138,6 +1135,7 @@ document.addEventListener('DOMContentLoaded',function(){
     antKey=document.getElementById('ant-key').value.trim();
     finKey=document.getElementById('fin-key').value.trim();
     fmpKey=document.getElementById('fmp-key').value.trim();
+    tdKey=document.getElementById('td-key').value.trim();
     ejsService=document.getElementById('ejs-svc').value.trim();
     ejsTemplate=document.getElementById('ejs-tpl').value.trim();
     ejsPublic=document.getElementById('ejs-pub').value.trim();
@@ -1147,7 +1145,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if(!finKey){err.textContent='Please enter your Finnhub API key.';err.style.display='block';return;}
     if(!fmpKey||fmpKey.length<20){err.textContent='Please enter your FMP API key.';err.style.display='block';return;}
     err.style.display='none';
-    saveKeys(antKey,finKey,fmpKey,ejsService,ejsTemplate,ejsPublic);
+    saveKeys(antKey,finKey,fmpKey,tdKey,ejsService,ejsTemplate,ejsPublic);
     if(ejsPublic&&window.emailjs)window.emailjs.init(ejsPublic);
     document.getElementById('overlay').style.display='none';
     document.getElementById('progress').style.display='block';
