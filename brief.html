@@ -479,7 +479,7 @@ function main(){
     return p2;
   });
 
-  // Step 3: Technical analysis - top 10 by value
+  // Step 3: Technical analysis - top 20 by value
   chain=chain.then(function(){
     setP(44,'Computing weights + technical...');
     var sh=loadSh(), totalV=0, ranked=[];
@@ -487,8 +487,8 @@ function main(){
       var v=(sh[q.t]||0)*(q.price||0);ranked.push({t:q.t,v:v});totalV+=v;
     });
     ranked.sort(function(a,b){return b.v-a.v;});
-    var topTk=ranked.filter(function(x){return x.v>0;}).slice(0,10).map(function(x){return x.t;});
-    if(topTk.length<3){topTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,10).map(function(q){return q.t;});}
+    var topTk=ranked.filter(function(x){return x.v>0;}).slice(0,20).map(function(x){return x.t;});
+    if(topTk.length<3){topTk=qdata.filter(function(q){return q.th!=='Benchmark'&&q.th!=='ETF'&&q.price!=null;}).sort(function(a,b){return Math.abs(b.pct||0)-Math.abs(a.pct||0);}).slice(0,20).map(function(q){return q.t;});}
     var techTk=['SPY'].concat(topTk);
     var p3=Promise.resolve();
     techTk.forEach(function(tk,i){
