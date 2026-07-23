@@ -269,9 +269,12 @@ function compositeScore(tk,tm,r,pt,wt,pm,am,q){
     if(upside>0.15){score++;reasons.push('>15% below target ('+(upside*100).toFixed(0)+'%)');}
   }
   if(wt&&wt.pct>15){score--;reasons.push('Position >15% of portfolio');}
-  if(pm&&pm.peVsHist!=null){
-    if(pm.peVsHist>25){score--;reasons.push('P/E '+pm.peVsHist.toFixed(0)+'% above 5yr avg');}
-    if(pm.peVsHist<-15){score++;reasons.push('P/E '+Math.abs(pm.peVsHist).toFixed(0)+'% below 5yr avg');}
+  if(pm&&pm.pePercentile!=null){
+    if(pm.pePercentile>=85){score--;reasons.push('P/E in top '+(100-pm.pePercentile).toFixed(0)+'% of own '+(pm.histPeYears||'')+'yr history (rich)');}
+    if(pm.pePercentile<=15){score++;reasons.push('P/E in bottom '+pm.pePercentile.toFixed(0)+'% of own '+(pm.histPeYears||'')+'yr history (cheap)');}
+  }else if(pm&&pm.peVsHist!=null){
+    if(pm.peVsHist>25){score--;reasons.push('P/E '+pm.peVsHist.toFixed(0)+'% above own history avg');}
+    if(pm.peVsHist<-15){score++;reasons.push('P/E '+Math.abs(pm.peVsHist).toFixed(0)+'% below own history avg');}
   }
   if(am){
     if(am.trend==='improving'){score++;reasons.push('Analyst sentiment improving');}
@@ -680,15 +683,23 @@ function main(){
         }).catch(function(){});
       }).then(function(){return slp(300);})
       .then(function(){
-        // Valuation vs own 5yr history: annual (non-TTM) ratios, averaged over last 5 years
-        return fmp('/ratios?symbol='+tk+'&period=annual&limit=5').then(function(r){
-          console.log('FMP ratios (5yr history) sample ('+tk+'):',r&&r.length?r[0]:r);
+        // Valuation percentile vs own history: how does current TTM P/E rank against the
+        // company's own annual P/E over the last 10 years? Same single FMP call as before,
+        // just requesting more years (free - it's the same endpoint, more rows) so the
+        // percentile isn't computed off only 5 data points.
+        return fmp('/ratios?symbol='+tk+'&period=annual&limit=10').then(function(r){
+          console.log('FMP ratios (valuation history) sample ('+tk+'):',r&&r.length?r[0]:r);
           if(r&&r.length&&peerMap[tk]){
             var pes=r.map(function(x){return x.priceToEarningsRatio!=null?x.priceToEarningsRatio:(x.priceToEarningsRatioTTM!=null?x.priceToEarningsRatioTTM:null);}).filter(function(v){return v!=null&&v>0;});
-            if(pes.length>=2){
+            if(pes.length>=3){
               var avgPe=pes.reduce(function(a,b){return a+b;},0)/pes.length;
               peerMap[tk].histPE=avgPe;
+              peerMap[tk].histPeYears=pes.length;
               peerMap[tk].peVsHist=(peerMap[tk].pe!=null&&avgPe>0)?((peerMap[tk].pe-avgPe)/avgPe*100):null;
+              if(peerMap[tk].pe!=null){
+                var below=pes.filter(function(v){return v<=peerMap[tk].pe;}).length;
+                peerMap[tk].pePercentile=below/pes.length*100;
+              }
             }
           }
         }).catch(function(){});
@@ -912,10 +923,18 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var sh5=loadSh(), wm5={}, tv5=0;
     qdata.forEach(function(q){var v=(sh5[q.t]||0)*(q.price||0);wm5[q.t]={pct:0,v:v};tv5+=v;});
     if(tv5>0)Object.keys(wm5).forEach(function(t){wm5[t].pct=wm5[t].v/tv5*100;});
-    html+='<div class="section"><h3>Valuation vs. Own History, Yield &amp; Position Signal</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">P/E vs 5yr Avg</th><th class="r">FCF Yield</th><th class="r">Div Yield</th><th class="r">Analyst Trend</th><th class="r">Signal</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Valuation vs. Own History, Yield &amp; Position Signal</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Valuation Percentile</th><th class="r">FCF Yield</th><th class="r">Div Yield</th><th class="r">Analyst Trend</th><th class="r">Signal</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];
-      var pvh=pm.peVsHist!=null?'<span class="'+(pm.peVsHist<=0?'up':'dn')+'">'+(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'%</span>':'<span class="na">--</span>';
+      var pvh;
+      if(pm.pePercentile!=null){
+        var pctColor=pm.pePercentile>=85?'var(--red)':pm.pePercentile<=15?'var(--green)':'var(--text)';
+        pvh='<span style="color:'+pctColor+'" title="Current P/E is higher than '+pm.pePercentile.toFixed(0)+'% of its own last '+(pm.histPeYears||'')+' annual readings">'+pm.pePercentile.toFixed(0)+'th pct</span>';
+      }else if(pm.peVsHist!=null){
+        pvh='<span class="'+(pm.peVsHist<=0?'up':'dn')+'">'+(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'% vs avg</span>';
+      }else{
+        pvh='<span class="na">--</span>';
+      }
       var fcfy=pm.fcfYield!=null?pm.fcfYield.toFixed(1)+'%':'<span class="na">--</span>';
       var dvy=pm.divYield!=null?pm.divYield.toFixed(1)+'%':'<span class="na">--</span>';
       var am=analystMap[tk];
@@ -1078,7 +1097,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'2. NOTABLE MOVERS: Top gainers/decliners with likely drivers.\n'
     +'3. THEMATIC OBSERVATIONS: Sector performance and rotation signals.\n'
     +'4. TECHNICAL PICTURE: Using RSI, SMA20/50 trend, MACD histogram, Bollinger%, ATR, volume, RS vs SPY (RS30/RS90), and Fibonacci retracement levels - write substantive technical analysis ONLY for the tickers listed with real numbers in the Technical data section below. Name those specific tickers and their actual numbers. Cover uptrends, downtrends, overbought/oversold conditions, any holdings sitting at or near key Fibonacci levels (especially 38.2%, 50%, 61.8%), and which holdings are outperforming or underperforming SPY on 30 and 90-day basis. Do NOT discuss or speculate about technical indicators for any ticker not listed in that data - do not use vague phrases like "price action allows for pattern inference" to paper over missing data. If a holding has no technical data this cycle, either omit it from this paragraph entirely or state plainly in one clause that granular technical data was not available for it.\n'
-    +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers, AND relative to their own 5-year valuation history (a stock can be cheap vs peers but still expensive vs its own past). Reference FCF yield and dividend yield where relevant to the valuation case. Note whether analyst sentiment is improving or declining for key holdings, and flag any highly correlated position pairs where trimming one would not meaningfully diversify the portfolio. Use the composite Signal label (STRONG TRIM/TRIM WATCH/NEUTRAL/ADD WATCH/STRONG ADD) as a starting point for your own judgment, not a verdict to repeat verbatim.\n'
+    +'5. ANALYST DIVERGENCE AND PEER POSITIONING: Where does consensus or targets diverge from price action? Using the peer comparison data, identify which of your holdings are the sector leaders vs laggards on valuation (P/E), growth (revenue growth rate), and profitability (net margin). Note any holdings that look expensive or cheap relative to their peers, AND relative to their own valuation history using the ValuationPercentile figure (e.g. "in the 90th percentile of its own history" means richer than 90% of its past readings - a stock can be cheap vs peers but still expensive vs its own past). Reference FCF yield and dividend yield where relevant to the valuation case. Note whether analyst sentiment is improving or declining for key holdings, and flag any highly correlated position pairs where trimming one would not meaningfully diversify the portfolio. Use the composite Signal label (STRONG TRIM/TRIM WATCH/NEUTRAL/ADD WATCH/STRONG ADD) as a starting point for your own judgment, not a verdict to repeat verbatim.\n'
     +'6. EARNINGS QUALITY AND PREVIEW: Interpret recent EPS surprises from the historical data. Then for any holdings reporting in the next 30 days, discuss what the consensus expects (EPS and revenue estimates with ranges), what a beat or miss would likely mean for the stock given current positioning, and which upcoming reports carry the most portfolio risk given position sizes.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
     +'8. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
@@ -1088,7 +1107,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'Portfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\n'
     +'Value: '+totalFmt+'\nTop positions: '+topPos+'\n\n'
     +'Holdings:\n'+holdStr+'\n\nAlerts:\n'+alertStr+'\n\nTechnical:\n'+techStr+'\n\nAnalyst:\n'+analStr+'\n\nEPS:\n'+epsStr+'\n\nNews:\n'+newsStr+'\n\nUpcoming earnings: '+earnStr+'\n\nWatchlist:\n'+wlStr+'\n\nPeer comparison (your holding vs sector peers):\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk];return tk+' P/E:'+(pm.pe!=null?pm.pe.toFixed(1):'n/a')+' RevGrowth:'+(pm.revGrowth!=null?pm.revGrowth.toFixed(1)+'%':'n/a')+' NetMargin:'+(pm.margin!=null?pm.margin.toFixed(1)+'%':'n/a')+' GrossMargin:'+(pm.grossMargin!=null?pm.grossMargin.toFixed(1)+'%':'n/a')+'  vs peers: '+pm.peers.map(function(p){return p.t+' P/E:'+(p.pe!=null?p.pe.toFixed(1):'n/a')+' RevGrowth:'+(p.revGrowth!=null?p.revGrowth.toFixed(1)+'%':'n/a')+' NetMgn:'+(p.margin!=null?p.margin.toFixed(1)+'%':'n/a')+' GrossMgn:'+(p.grossMargin!=null?p.grossMargin.toFixed(1)+'%':'n/a');}).join(' | ');}).join('\n')||'none'
-    +'\n\nValuation vs own 5yr history, yield, and composite signal:\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk],am=analystMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];var cs=compositeScore(tk,techMap[tk],rangeMap[tk],targetMap[tk],null,pm,am,qh);return tk+' PEvsHist:'+(pm.peVsHist!=null?(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'%':'n/a')+' FCFYield:'+(pm.fcfYield!=null?pm.fcfYield.toFixed(1)+'%':'n/a')+' DivYield:'+(pm.divYield!=null?pm.divYield.toFixed(1)+'%':'n/a')+' AnalystTrend:'+(am?am.trend:'n/a')+' Signal:'+cs.label+'('+cs.reasons.join(', ')+')';}).join('\n')||'none'
+    +'\n\nValuation vs own history (percentile rank), yield, and composite signal:\n'+Object.keys(peerMap).map(function(tk){var pm=peerMap[tk],am=analystMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];var cs=compositeScore(tk,techMap[tk],rangeMap[tk],targetMap[tk],null,pm,am,qh);return tk+' ValuationPercentile:'+(pm.pePercentile!=null?pm.pePercentile.toFixed(0)+'th of last '+(pm.histPeYears||'?')+'yrs':'n/a')+' PEvsHistAvg:'+(pm.peVsHist!=null?(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'%':'n/a')+' FCFYield:'+(pm.fcfYield!=null?pm.fcfYield.toFixed(1)+'%':'n/a')+' DivYield:'+(pm.divYield!=null?pm.divYield.toFixed(1)+'%':'n/a')+' AnalystTrend:'+(am?am.trend:'n/a')+' Signal:'+cs.label+'('+cs.reasons.join(', ')+')';}).join('\n')||'none'
     +'\n\nHigh correlation pairs among top holdings (>0.7, may limit diversification benefit):\n'+(corrPairs&&corrPairs.length?corrPairs.filter(function(p){return p.c>0.7;}).slice(0,6).map(function(p){return p.a+' vs '+p.b+': '+p.c.toFixed(2);}).join('\n'):'none')
     +'\n\nEarnings estimates (next 30 days):\n'+Object.keys(earnPreviewMap).map(function(tk){var ep=earnPreviewMap[tk];return tk+'('+earningsMap[tk]+'): EPS est $'+(ep.epsEst!=null?ep.epsEst.toFixed(2):'n/a')+' range $'+(ep.epsLow!=null?ep.epsLow.toFixed(2):'n/a')+'-$'+(ep.epsHigh!=null?ep.epsHigh.toFixed(2):'n/a')+' RevEst $'+(ep.revEst!=null?(ep.revEst/1e9).toFixed(1)+'B':'n/a');}).join('\n')||'none'+'\n\nWrite the complete brief now.';
 
