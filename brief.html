@@ -760,6 +760,42 @@ function main(){
     return p9.then(function(){console.log('Total FMP calls this run so far (through peer comparison):',fmpCalls);});
   });
 
+  // Step 9.6: Watchlist valuation screen - same lens as Holdings (P/E percentile vs own
+  // history, margin, dividend yield) but lighter weight (2 FMP calls/ticker vs ~7 for
+  // held stocks, capped at 5 tickers) since FMP's free tier showed it can 402 out well
+  // before a full run completes even at today's already-trimmed call volume.
+  var wlValMap={};
+  chain=chain.then(function(){
+    setP(89,'Watchlist valuation screen (FMP)...');
+    var wlTk=loadWL().slice(0,5);
+    var p96=Promise.resolve();
+    wlTk.forEach(function(tk){
+      p96=p96.then(function(){
+        return fmp('/ratios-ttm?symbol='+tk).then(function(r){
+          var d=r&&r.length?r[0]:r||{};
+          wlValMap[tk]={
+            pe:d.priceToEarningsRatioTTM!=null?d.priceToEarningsRatioTTM:null,
+            margin:d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null,
+            divYield:d.dividendYieldTTM!=null?(d.dividendYieldTTM*100):null
+          };
+        }).catch(function(){wlValMap[tk]=wlValMap[tk]||{};});
+      }).then(function(){return slp(300);})
+      .then(function(){
+        return fmp('/ratios?symbol='+tk+'&period=annual&limit=10').then(function(r){
+          if(r&&r.length&&wlValMap[tk]){
+            var pes=r.map(function(x){return x.priceToEarningsRatio!=null?x.priceToEarningsRatio:null;}).filter(function(v){return v!=null&&v>0;});
+            if(pes.length>=3&&wlValMap[tk].pe!=null){
+              var below=pes.filter(function(v){return v<=wlValMap[tk].pe;}).length;
+              wlValMap[tk].pePercentile=below/pes.length*100;
+              wlValMap[tk].histPeYears=pes.length;
+            }
+          }
+        }).catch(function(){});
+      }).then(function(){return slp(300);});
+    });
+    return p96;
+  });
+
   // Step 9.5: Correlation across top holdings - computed from candle data already fetched
   // in Step 3, zero additional API calls
   var corrPairs=[];
@@ -823,7 +859,7 @@ function main(){
 
   // Step 11: Render
   chain=chain.then(function(){
-    render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs);
+    render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs,wlValMap);
   }).catch(function(e){
     document.getElementById('progress').style.display='none';
     document.getElementById('report').style.display='block';
@@ -831,7 +867,7 @@ function main(){
   });
 }
 
-function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs){
+function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analystMap,earningsMap,wlData,peerMap,earnPreviewMap,corrPairs,wlValMap){
   setP(90,'Rendering...');
   var valid=qdata.filter(function(q){return q.pct!=null&&q.th!=='Benchmark';});
   var sorted=valid.slice().sort(function(a,b){return b.pct-a.pct;});
@@ -1041,12 +1077,22 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
 
   // Watchlist
   var wlnotes=loadWLN();
-  html+='<div class="section" style="border-color:rgba(255,214,102,0.2)"><h3 style="color:var(--yellow)">Watchlist ('+loadWL().length+' stocks)</h3><div class="wl-add"><input type="text" id="wl-inp" placeholder="Add ticker..."><button onclick="addWL()">+ Add</button></div>';
+  html+='<div class="section" style="border-color:rgba(255,214,102,0.2)"><h3 style="color:var(--yellow)">Watchlist ('+loadWL().length+' stocks)</h3><div style="font-size:0.7rem;color:var(--dim);margin-bottom:0.6rem;">Valuation screen (P/E percentile vs own history, net margin, dividend yield) covers up to the first 5 tickers - same lens used on Holdings, applied here to help screen candidates before buying.</div><div class="wl-add"><input type="text" id="wl-inp" placeholder="Add ticker..."><button onclick="addWL()">+ Add</button></div>';
   wlData.forEach(function(w){
     var note=(wlnotes[w.t]||'').replace(/"/g,'&quot;');
     var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;
     var rp2=null;if(w.hi52&&w.lo52&&w.price)rp2=Math.min(100,Math.max(0,(w.price-w.lo52)/(w.hi52-w.lo52)*100));
-    html+='<div class="wl-row" id="wlrow-'+w.t+'"><span class="tk">'+w.t+'</span><span class="'+(w.pct>=0?'up':'dn')+'" style="min-width:55px;text-align:right;font-family:monospace;">'+(w.pct!=null?(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%':'--')+'</span><span style="font-family:monospace;min-width:70px;text-align:right;">'+(w.price?'$'+w.price.toFixed(2):'--')+'</span><span style="font-size:0.75rem;color:var(--dim);flex:1;">'+(rp2!=null?' 52w:'+rp2.toFixed(0)+'%':'')+(up!=null?' tgt:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+'</span><input type="text" data-wltk="'+w.t+'" style="width:140px;background:rgba(255,255,255,0.04);border:1px solid transparent;border-radius:4px;color:var(--dim);font-size:0.75rem;padding:0.18rem 0.4rem;" placeholder="thesis..." value="'+note+'"><button class="wl-rm" data-rmtk="'+w.t+'">x</button></div>';
+    var wv=wlValMap&&wlValMap[w.t];
+    var valCell='';
+    if(wv){
+      var parts=[];
+      if(wv.pePercentile!=null){var pc=wv.pePercentile>=85?'var(--red)':wv.pePercentile<=15?'var(--green)':'var(--text)';parts.push('<span style="color:'+pc+'" title="P/E higher than '+wv.pePercentile.toFixed(0)+'% of its own last '+(wv.histPeYears||'')+' annual readings">P/E '+wv.pePercentile.toFixed(0)+'th pct</span>');}
+      else if(wv.pe!=null){parts.push('P/E '+wv.pe.toFixed(1));}
+      if(wv.margin!=null)parts.push('margin '+wv.margin.toFixed(1)+'%');
+      if(wv.divYield!=null)parts.push('div '+wv.divYield.toFixed(1)+'%');
+      if(parts.length)valCell='<span style="font-size:0.72rem;color:var(--dim);white-space:nowrap;">'+parts.join(' &middot; ')+'</span>';
+    }
+    html+='<div class="wl-row" id="wlrow-'+w.t+'"><span class="tk">'+w.t+'</span><span class="'+(w.pct>=0?'up':'dn')+'" style="min-width:55px;text-align:right;font-family:monospace;">'+(w.pct!=null?(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%':'--')+'</span><span style="font-family:monospace;min-width:70px;text-align:right;">'+(w.price?'$'+w.price.toFixed(2):'--')+'</span><span style="font-size:0.75rem;color:var(--dim);flex:1;">'+(rp2!=null?' 52w:'+rp2.toFixed(0)+'%':'')+(up!=null?' tgt:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+'</span>'+valCell+'<input type="text" data-wltk="'+w.t+'" style="width:140px;background:rgba(255,255,255,0.04);border:1px solid transparent;border-radius:4px;color:var(--dim);font-size:0.75rem;padding:0.18rem 0.4rem;" placeholder="thesis..." value="'+note+'"><button class="wl-rm" data-rmtk="'+w.t+'">x</button></div>';
   });
   html+='</div>';
 
@@ -1088,7 +1134,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var earnStr=Object.keys(earningsMap).map(function(t){return t+':'+earningsMap[t];}).join(', ')||'none';
   var alertStr=alerts.length?alerts.map(function(a){return a.t+': '+a.reason;}).join('\n'):'none';
   var analStr=Object.keys(analystMap).map(function(t){var v=analystMap[t],pt=targetMap[t];return t+': '+v.buy+'B/'+v.hold+'H/'+v.sell+'S'+(pt?' tgt:$'+pt.mean.toFixed(0):'');}).join('\n')||'none';
-  var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'');}).join('\n')||'none';
+  var wlStr=wlData.filter(function(w){return w.price!=null;}).map(function(w){var up=w.target&&w.price?(w.target-w.price)/w.price*100:null;var wv=wlValMap&&wlValMap[w.t];var valStr=wv?(' '+(wv.pePercentile!=null?'PEpercentile:'+wv.pePercentile.toFixed(0)+'th':(wv.pe!=null?'PE:'+wv.pe.toFixed(1):''))+(wv.margin!=null?' margin:'+wv.margin.toFixed(1)+'%':'')+(wv.divYield!=null?' div:'+wv.divYield.toFixed(1)+'%':'')):'';return'WATCH '+w.t+': $'+(w.price||0).toFixed(2)+' '+(w.pct>=0?'+':'')+w.pct.toFixed(2)+'%'+(up!=null?' upside:'+(up>=0?'+':'')+up.toFixed(1)+'%':'')+(w.target?' tgt:$'+w.target.toFixed(0):'')+valStr;}).join('\n')||'none';
 
   var prompt='You are a senior portfolio analyst. Write a professional close-of-market brief in 8-10 paragraphs of flowing prose. Separate paragraphs with ---. No bullet points.\n'
     +'RULES: Do NOT mention insider trading or Form 4 filings under any circumstances. Every paragraph must name specific tickers and cite specific numbers. If data for a metric or ticker is genuinely absent from the DATA section below, say so plainly in a short clause rather than writing vague, hedging, or filler language to sound comprehensive without real content - do not write sentences that could apply to any stock without the actual numbers behind them.\n\n'
@@ -1101,7 +1147,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     +'6. EARNINGS QUALITY AND PREVIEW: Interpret recent EPS surprises from the historical data. Then for any holdings reporting in the next 30 days, discuss what the consensus expects (EPS and revenue estimates with ranges), what a beat or miss would likely mean for the stock given current positioning, and which upcoming reports carry the most portfolio risk given position sizes.\n'
     +'7. PORTFOLIO CONCENTRATION: Sector weights, overweight/underweight, suggest 2-3 specific stocks for diversification.\n'
     +'8. RISK MANAGEMENT: Based on largest positions and technical picture, suggest specific stop-loss levels or sizing adjustments.\n'
-    +'9. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing.\n'
+    +'9. WATCHLIST: For each watchlist stock, brief assessment and verdict on entry timing. Where PEpercentile, margin, or dividend data is provided for a watchlist name, use it explicitly - e.g. a stock trading in a low percentile of its own valuation history is a stronger case for a value-conscious long-term buyer than one at a valuation high regardless of how far below its price target it sits.\n'
     +'10. FORWARD LOOK: Upcoming earnings and near-term outlook.\n\n'
     +'DATA:\n'
     +'Portfolio avg: '+(avgPct>=0?'+':'')+avgPct.toFixed(2)+'% | SPY: '+(spy&&spy.pct!=null?spy.pct.toFixed(2):'n/a')+'% | QQQ: '+(qqq&&qqq.pct!=null?qqq.pct.toFixed(2):'n/a')+'%\n'
