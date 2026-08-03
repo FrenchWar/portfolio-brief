@@ -102,7 +102,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 <body>
 <div id="overlay">
   <div id="box">
-    <h1>Portfolio Close-of-Market Brief</h1>
+    <h1>Portfolio Close-of-Market Brief <span style="font-size:0.6rem;color:var(--dim);font-weight:400;vertical-align:middle;">build v29</span></h1>
     <p>Keys save automatically after first use.</p>
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
@@ -987,7 +987,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var totalFmt=totalV>0?'$'+totalV.toLocaleString('en-US',{maximumFractionDigits:0}):'Enter shares to calculate';
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
-  var html='<div class="rhead"><h2>Close-of-Market Brief</h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;"><input type="email" id="email-to-inp" placeholder="recipient@email.com" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.4rem 0.7rem;font-size:0.8rem;width:190px;"><button class="rbtn" onclick="window.suggestIdeas()">[S] Suggest Ideas</button><button class="rbtn" onclick="window.emailReport()">[M] Email</button><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
+  var html='<div class="rhead"><h2>Close-of-Market Brief <span style="font-size:0.55rem;color:var(--dim);font-weight:400;">v29</span></h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;"><input type="email" id="email-to-inp" placeholder="recipient@email.com" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.4rem 0.7rem;font-size:0.8rem;width:190px;"><button class="rbtn" onclick="window.suggestIdeas()">[S] Suggest Ideas</button><button class="rbtn" onclick="window.emailReport()">[M] Email</button><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
   if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
 
   // Scorecard
