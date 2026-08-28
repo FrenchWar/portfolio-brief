@@ -102,7 +102,7 @@ body{background:var(--ink);color:var(--text);font-family:'Segoe UI',sans-serif;f
 <body>
 <div id="overlay">
   <div id="box">
-    <h1>Portfolio Close-of-Market Brief <span style="font-size:0.6rem;color:var(--dim);font-weight:400;vertical-align:middle;">build v30</span></h1>
+    <h1>Portfolio Close-of-Market Brief <span style="font-size:0.6rem;color:var(--dim);font-weight:400;vertical-align:middle;">build v31</span></h1>
     <p>Keys save automatically after first use.</p>
     <div class="fl"><label>Anthropic API Key <span class="saved" id="ant-saved">saved</span></label><input type="password" id="ant-key" placeholder="sk-ant-..." autocomplete="off"></div>
     <div class="fl"><label>Finnhub API Key <span class="saved" id="fin-saved">saved</span></label><input type="password" id="fin-key" placeholder="finnhub key" autocomplete="off"></div>
@@ -213,25 +213,6 @@ function twelveData(tk){
     }).filter(function(r){return !isNaN(r.close)&&!isNaN(r.high)&&!isNaN(r.low);});
     rows.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;}); // defensive - don't trust order=ASC blindly
     if(rows.length<21)throw new Error('TwelveData: insufficient rows for '+tk);
-    return rows;
-  });
-}
-
-function twelveDataMonthly(tk){
-  // Long-range monthly price history, used to pair with raw annual EPS (from FMP's basic
-  // income-statement endpoint) so we can compute our own historical P/E series - FMP's
-  // own /ratios endpoint that would normally supply this is blocked on the free tier.
-  var url='https://api.twelvedata.com/time_series?symbol='+encodeURIComponent(tk)+'&interval=1month&outputsize=132&order=ASC&apikey='+tdKey;
-  return fetch(url).then(function(r){
-    if(!r.ok)throw new Error('TwelveData(monthly) HTTP '+r.status);
-    return r.json();
-  }).then(function(j){
-    if(!j||j.status==='error')throw new Error('TwelveData(monthly): '+(j&&j.message?j.message:'error for '+tk));
-    if(!j.values||!j.values.length)throw new Error('TwelveData(monthly): no values for '+tk);
-    var rows=j.values.map(function(v){
-      return{date:v.datetime,close:parseFloat(v.close)};
-    }).filter(function(r){return !isNaN(r.close);});
-    rows.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
     return rows;
   });
 }
@@ -433,28 +414,6 @@ window.suggestIdeas=function(){
           var d=r&&r.length?r[0]:r||{};
           valMap[tk]={pe:d.priceToEarningsRatioTTM!=null?d.priceToEarningsRatioTTM:null,margin:d.netProfitMarginTTM!=null?(d.netProfitMarginTTM*100):null,divYield:d.dividendYieldTTM!=null?(d.dividendYieldTTM*100):null};
         }).catch(function(){valMap[tk]=valMap[tk]||{};});
-      }).then(function(){return slp(300);})
-      .then(function(){
-        return fmp('/income-statement?symbol='+tk+'&period=annual&limit=10').then(function(r){
-          if(!r||!r.length)throw new Error('no income statement data for '+tk);
-          return r.map(function(x){return{date:x.date,eps:x.epsDiluted!=null?x.epsDiluted:(x.eps!=null?x.eps:null)};}).filter(function(x){return x.eps!=null&&x.eps>0&&x.date;});
-        }).then(function(epsRows){
-          if(epsRows.length<3)throw new Error('insufficient EPS history for '+tk);
-          return twelveDataMonthly(tk).then(function(priceRows){
-            if(!priceRows||!priceRows.length)throw new Error('no monthly price history for '+tk);
-            var pes=[];
-            epsRows.forEach(function(er){
-              var candidates=priceRows.filter(function(pr){return pr.date<=er.date;});
-              var match=candidates.length?candidates[candidates.length-1]:null;
-              if(match&&match.close>0)pes.push(match.close/er.eps);
-            });
-            if(pes.length>=3&&valMap[tk]&&valMap[tk].pe!=null){
-              var below=pes.filter(function(v){return v<=valMap[tk].pe;}).length;
-              valMap[tk].pePercentile=below/pes.length*100;
-              valMap[tk].histPeYears=pes.length;
-            }
-          }).then(function(){return slp(7800);}); // Twelve Data 8 req/min pacing
-        }).catch(function(){});
       }).then(function(){return slp(300);});
     });
 
@@ -804,41 +763,6 @@ function main(){
         }).catch(function(){});
       }).then(function(){return slp(300);})
       .then(function(){
-        // Valuation percentile vs own history, built ourselves: FMP's /ratios endpoint
-        // that used to supply this is blocked on the free tier (confirmed via console -
-        // it 402s on the very first call of a run, not from quota exhaustion). Instead we
-        // pull raw annual EPS from FMP's more basic income-statement endpoint, pair each
-        // fiscal year with our own monthly closing price from Twelve Data, and compute
-        // implied P/E per year ourselves.
-        return fmp('/income-statement?symbol='+tk+'&period=annual&limit=10').then(function(r){
-          console.log('FMP income-statement (EPS history) sample ('+tk+'):',r&&r.length?r[0]:r);
-          if(!r||!r.length)throw new Error('no income statement data for '+tk);
-          return r.map(function(x){return{date:x.date,eps:x.epsDiluted!=null?x.epsDiluted:(x.eps!=null?x.eps:null)};}).filter(function(x){return x.eps!=null&&x.eps>0&&x.date;});
-        }).then(function(epsRows){
-          if(epsRows.length<3)throw new Error('insufficient EPS history for '+tk);
-          return twelveDataMonthly(tk).then(function(priceRows){
-            if(!priceRows||!priceRows.length)throw new Error('no monthly price history for '+tk);
-            var pes=[];
-            epsRows.forEach(function(er){
-              // find the closest monthly close on or before the fiscal year end date
-              var candidates=priceRows.filter(function(pr){return pr.date<=er.date;});
-              var match=candidates.length?candidates[candidates.length-1]:null;
-              if(match&&match.close>0)pes.push(match.close/er.eps);
-            });
-            if(pes.length>=3&&peerMap[tk]){
-              var avgPe=pes.reduce(function(a,b){return a+b;},0)/pes.length;
-              peerMap[tk].histPE=avgPe;
-              peerMap[tk].histPeYears=pes.length;
-              peerMap[tk].peVsHist=(peerMap[tk].pe!=null&&avgPe>0)?((peerMap[tk].pe-avgPe)/avgPe*100):null;
-              if(peerMap[tk].pe!=null){
-                var below=pes.filter(function(v){return v<=peerMap[tk].pe;}).length;
-                peerMap[tk].pePercentile=below/pes.length*100;
-              }
-            }
-          }).then(function(){return slp(7800);}); // Twelve Data 8 req/min pacing
-        }).catch(function(e){console.warn('Valuation-history build failed for '+tk+':',e.message);});
-      }).then(function(){return slp(300);})
-      .then(function(){
         // FCF yield from key-metrics-ttm
         return fmp('/key-metrics-ttm?symbol='+tk).then(function(r){
           var d=r&&r.length?r[0]:r||{};
@@ -913,28 +837,6 @@ function main(){
             divYield:d.dividendYieldTTM!=null?(d.dividendYieldTTM*100):null
           };
         }).catch(function(){wlValMap[tk]=wlValMap[tk]||{};});
-      }).then(function(){return slp(300);})
-      .then(function(){
-        return fmp('/income-statement?symbol='+tk+'&period=annual&limit=10').then(function(r){
-          if(!r||!r.length)throw new Error('no income statement data for '+tk);
-          return r.map(function(x){return{date:x.date,eps:x.epsDiluted!=null?x.epsDiluted:(x.eps!=null?x.eps:null)};}).filter(function(x){return x.eps!=null&&x.eps>0&&x.date;});
-        }).then(function(epsRows){
-          if(epsRows.length<3)throw new Error('insufficient EPS history for '+tk);
-          return twelveDataMonthly(tk).then(function(priceRows){
-            if(!priceRows||!priceRows.length)throw new Error('no monthly price history for '+tk);
-            var pes=[];
-            epsRows.forEach(function(er){
-              var candidates=priceRows.filter(function(pr){return pr.date<=er.date;});
-              var match=candidates.length?candidates[candidates.length-1]:null;
-              if(match&&match.close>0)pes.push(match.close/er.eps);
-            });
-            if(pes.length>=3&&wlValMap[tk]&&wlValMap[tk].pe!=null){
-              var below=pes.filter(function(v){return v<=wlValMap[tk].pe;}).length;
-              wlValMap[tk].pePercentile=below/pes.length*100;
-              wlValMap[tk].histPeYears=pes.length;
-            }
-          }).then(function(){return slp(7800);}); // Twelve Data 8 req/min pacing
-        }).catch(function(e){console.warn('Watchlist valuation-history build failed for '+tk+':',e.message);});
       }).then(function(){return slp(300);});
     });
     return p96;
@@ -1039,7 +941,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
   var totalFmt=totalV>0?'$'+totalV.toLocaleString('en-US',{maximumFractionDigits:0}):'Enter shares to calculate';
   var topPos=Object.keys(wm).filter(function(t){return wm[t].pct>0;}).sort(function(a,b){return wm[b].pct-wm[a].pct;}).slice(0,10).map(function(t){return t+' '+wm[t].pct.toFixed(1)+'%';}).join(', ');
 
-  var html='<div class="rhead"><h2>Close-of-Market Brief <span style="font-size:0.55rem;color:var(--dim);font-weight:400;">v30</span></h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;"><input type="email" id="email-to-inp" placeholder="recipient@email.com" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.4rem 0.7rem;font-size:0.8rem;width:190px;"><button class="rbtn" onclick="window.suggestIdeas()">[S] Suggest Ideas</button><button class="rbtn" onclick="window.emailReport()">[M] Email</button><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
+  var html='<div class="rhead"><h2>Close-of-Market Brief <span style="font-size:0.55rem;color:var(--dim);font-weight:400;">v31</span></h2><span class="rdate">'+today+'</span><div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;"><input type="email" id="email-to-inp" placeholder="recipient@email.com" style="background:rgba(255,255,255,0.05);border:1px solid var(--border);border-radius:6px;color:var(--white);padding:0.4rem 0.7rem;font-size:0.8rem;width:190px;"><button class="rbtn" onclick="window.suggestIdeas()">[S] Suggest Ideas</button><button class="rbtn" onclick="window.emailReport()">[M] Email</button><button class="rbtn" onclick="window.print()">[P] Print</button><button class="rbtn" onclick="window.exportData()">[E] Export</button><button class="rbtn" onclick="window.importData()">[I] Import</button><button class="rbtn" onclick="location.reload()">[R] Reload</button></div></div>';
   if(fails.length)html+='<div class="warn">Network issues: '+fails.join(', ')+'</div>';
 
   // Scorecard
@@ -1103,7 +1005,7 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
     var sh5=loadSh(), wm5={}, tv5=0;
     qdata.forEach(function(q){var v=(sh5[q.t]||0)*(q.price||0);wm5[q.t]={pct:0,v:v};tv5+=v;});
     if(tv5>0)Object.keys(wm5).forEach(function(t){wm5[t].pct=wm5[t].v/tv5*100;});
-    html+='<div class="section"><h3>Valuation vs. Own History, Yield &amp; Position Signal</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">Valuation Percentile</th><th class="r">FCF Yield</th><th class="r">Div Yield</th><th class="r">Analyst Trend</th><th class="r">Signal</th></tr></thead><tbody>';
+    html+='<div class="section"><h3>Valuation, Yield &amp; Position Signal</h3><div style="overflow-x:auto"><table class="htable"><thead><tr><th>Ticker</th><th class="r">P/E</th><th class="r">FCF Yield</th><th class="r">Div Yield</th><th class="r">Analyst Trend</th><th class="r">Signal</th></tr></thead><tbody>';
     peerKeys.forEach(function(tk){
       var pm=peerMap[tk],qh=qdata.filter(function(q){return q.t===tk;})[0];
       var pvh;
@@ -1112,6 +1014,8 @@ function render(qdata,fails,rangeMap,targetMap,techMap,epsMap,newsDigest,analyst
         pvh='<span style="color:'+pctColor+'" title="Current P/E is higher than '+pm.pePercentile.toFixed(0)+'% of its own last '+(pm.histPeYears||'')+' annual readings">'+pm.pePercentile.toFixed(0)+'th pct</span>';
       }else if(pm.peVsHist!=null){
         pvh='<span class="'+(pm.peVsHist<=0?'up':'dn')+'">'+(pm.peVsHist>=0?'+':'')+pm.peVsHist.toFixed(0)+'% vs avg</span>';
+      }else if(pm.pe!=null){
+        pvh=pm.pe.toFixed(1);
       }else{
         pvh='<span class="na">--</span>';
       }
